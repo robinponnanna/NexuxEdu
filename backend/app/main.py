@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import init_db
 from app.services.seed_data import seed_database_if_empty
+from app.services.seed_clash_data import seed_clash_scenario
 from app.services.transit_simulator import transit_simulator
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize Database tables and seed demo records
     await init_db()
     await seed_database_if_empty()
+    await seed_clash_scenario()
     # Start live transit telemetry simulator
     await transit_simulator.start()
     yield
