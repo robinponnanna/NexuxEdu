@@ -126,3 +126,266 @@ class BusTelemetryUpdate(BaseModel):
     registered_stop_name: Optional[str] = None
     distance_to_registered_stop_m: Optional[int] = None
 
+# --- Academic Support & Learning Management Schemas ---
+
+class SubjectModuleResponse(BaseModel):
+    id: int
+    module_number: int
+    co_code: str
+    title: str
+    description: Optional[str] = None
+
+class SubjectResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    department: str
+    semester: int
+    credits: int
+    modules: List[SubjectModuleResponse] = Field(default_factory=list)
+
+class AssessmentQuestionResponse(BaseModel):
+    id: int
+    question_label: str
+    co_code: str
+    module_id: Optional[int] = None
+    max_marks: float
+    is_optional: bool = False
+    or_group_id: Optional[str] = None
+
+class AssessmentResponse(BaseModel):
+    id: int
+    subject_id: int
+    category: str
+    name: str
+    max_marks: float
+    weightage_pct: float
+    assessment_date: Optional[str] = None
+    questions: List[AssessmentQuestionResponse] = Field(default_factory=list)
+
+class StudentQuestionMarkResponse(BaseModel):
+    id: int
+    question_id: int
+    question_label: str
+    co_code: str
+    max_marks: float
+    marks_obtained: float
+    is_attempted: bool
+    or_group_id: Optional[str] = None
+    feedback: Optional[str] = None
+
+class ModulePerformanceSummary(BaseModel):
+    id: int
+    module_number: int
+    co_code: str
+    title: str
+    description: Optional[str] = None
+    marks_obtained: float
+    marks_available: float
+    percentage: Optional[float] = None
+    status: Literal["Strong", "Developing", "Needs Support", "No Data"]
+
+class StudentSubjectSummary(BaseModel):
+    id: int
+    code: str
+    name: str
+    department: str
+    semester: int
+    credits: int
+    total_marks_obtained: float
+    total_marks_available: float
+    percentage: Optional[float] = None
+    status: Literal["Strong", "Developing", "Needs Support", "No Data"]
+    strongest_module: Optional[ModulePerformanceSummary] = None
+    weakest_module: Optional[ModulePerformanceSummary] = None
+
+class AssessmentPerformanceDetail(BaseModel):
+    id: int
+    category: str
+    name: str
+    max_marks: float
+    weightage_pct: float
+    assessment_date: Optional[str] = None
+    marks_obtained: float
+    marks_available: float
+    percentage: Optional[float] = None
+    questions: List[StudentQuestionMarkResponse] = Field(default_factory=list)
+
+class SubjectMarksDetailResponse(BaseModel):
+    subject: SubjectResponse
+    total_marks_obtained: float
+    total_marks_available: float
+    percentage: Optional[float] = None
+    status: Literal["Strong", "Developing", "Needs Support", "No Data"]
+    assessments: List[AssessmentPerformanceDetail] = Field(default_factory=list)
+    modules: List[ModulePerformanceSummary] = Field(default_factory=list)
+    strongest_module: Optional[ModulePerformanceSummary] = None
+    weakest_module: Optional[ModulePerformanceSummary] = None
+
+class SubjectModulesAnalysisResponse(BaseModel):
+    subject_id: int
+    subject_code: str
+    subject_name: str
+    modules: List[ModulePerformanceSummary] = Field(default_factory=list)
+    strongest_module: Optional[ModulePerformanceSummary] = None
+    weakest_module: Optional[ModulePerformanceSummary] = None
+
+class StudentMarksOverviewResponse(BaseModel):
+    student_id: int
+    student_name: str
+    roll_number: str
+    semester: int
+    overall_percentage: Optional[float] = None
+    total_credits: int
+    subjects: List[StudentSubjectSummary] = Field(default_factory=list)
+
+class AssessmentBreakdownItem(BaseModel):
+    assessment_id: int
+    assessment_category: str
+    assessment_name: str
+    weightage_pct: float
+    max_marks: float
+    marks_obtained: float
+    percentage: float
+    questions: List[StudentQuestionMarkResponse] = Field(default_factory=list)
+
+class COPerformanceResponse(BaseModel):
+    co_code: str
+    module_title: str
+    total_max_marks: float
+    total_marks_obtained: float
+    percentage: float
+    status: Literal["Strong", "Moderate", "Weak", "Developing", "Needs Support", "No Data"]
+    assessment_breakdown: List[Dict[str, Any]] = Field(default_factory=list)
+
+class SubjectPerformanceResponse(BaseModel):
+    subject_id: int
+    subject_code: str
+    subject_name: str
+    overall_percentage: float
+    co_breakdown: List[COPerformanceResponse] = Field(default_factory=list)
+    weak_areas: List[str] = Field(default_factory=list)
+
+class MaterialPageResponse(BaseModel):
+    id: int
+    page_number: int
+    page_title: str
+    content_text: str
+    structured_json: Optional[str] = None
+
+class MaterialChunkResponse(BaseModel):
+    id: int
+    material_id: int
+    page_id: Optional[int] = None
+    page_number: Optional[int] = None
+    topic_name: str
+    co_code: Optional[str] = None
+    chunk_index: int
+    chunk_text: str
+    similarity: Optional[float] = None
+
+class LearningMaterialResponse(BaseModel):
+    id: int
+    subject_id: int
+    subject_code: Optional[str] = None
+    subject_name: Optional[str] = None
+    module_id: Optional[int] = None
+    co_code: Optional[str] = None
+    title: str
+    source_reference: Optional[str] = None
+    total_pages: int
+    pages: List[MaterialPageResponse] = Field(default_factory=list)
+
+class MicroLessonSceneResponse(BaseModel):
+    scene_id: int
+    title: str
+    duration_seconds: int
+    narration: str
+    visual_type: Literal["diagram", "flowchart", "code", "table", "step_by_step"]
+    visual_data: Dict[str, Any] = Field(default_factory=dict)
+    key_takeaway: str
+
+class MicroLessonResponse(BaseModel):
+    id: int
+    subject_id: int
+    subject_code: Optional[str] = None
+    subject_name: Optional[str] = None
+    module_id: Optional[int] = None
+    co_code: Optional[str] = None
+    topic_key: str
+    title: str
+    duration_seconds: int
+    scenes: List[Dict[str, Any]] = Field(default_factory=list)
+
+class ModuleLearningMaterialResponse(BaseModel):
+    module_id: int
+    module_number: int
+    co_code: str
+    module_title: str
+    subject_id: int
+    subject_code: str
+    subject_name: str
+    materials: List[LearningMaterialResponse] = Field(default_factory=list)
+    total_chunks: int = 0
+    micro_lessons: List[MicroLessonResponse] = Field(default_factory=list)
+
+class ConceptExplanationRequest(BaseModel):
+    topic: str
+    subject_code: Optional[str] = None
+    user_question: Optional[str] = None
+
+class ConceptExplanationResponse(BaseModel):
+    topic: str
+    title: str
+    explanation: str
+    analogies: List[str] = Field(default_factory=list)
+    key_takeaways: List[str] = Field(default_factory=list)
+    diagram_ascii: Optional[str] = None
+    references: List[Citation] = Field(default_factory=list)
+    recommended_micro_lesson_id: Optional[int] = None
+
+# --- Academic RAG & Micro-Lesson Explanation Schemas ---
+
+class AcademicExplainRequest(BaseModel):
+    material_id: Optional[int] = None
+    page_number: Optional[int] = None
+    selected_text: str
+    subject_id: Optional[int] = None
+    module_id: Optional[int] = None
+    co_code: Optional[str] = None
+    topic: Optional[str] = None
+
+class AcademicSourceCitation(BaseModel):
+    material_id: int
+    title: str
+    page_number: int
+    topic: str
+    co_code: Optional[str] = None
+    subject_code: Optional[str] = None
+
+class GenerationMetadata(BaseModel):
+    mode: Literal["cache", "live", "fallback"]
+    model: str = "deterministic-academic-rag"
+    cached: bool = True
+    latency_ms: Optional[float] = None
+
+class MicroLessonPayload(BaseModel):
+    id: Optional[int] = None
+    title: str
+    topic: str
+    topic_key: Optional[str] = None
+    difficulty: str = "Intermediate"
+    duration_seconds: int = 45
+    objective: str
+    scenes: List[Dict[str, Any]] = Field(default_factory=list)
+    sources: List[AcademicSourceCitation] = Field(default_factory=list)
+
+class AcademicExplainResponse(BaseModel):
+    status: Literal["success", "insufficient_context", "error"]
+    lesson: MicroLessonPayload
+    source_context: Dict[str, Any] = Field(default_factory=dict)
+    generation: GenerationMetadata
+
+
+
+

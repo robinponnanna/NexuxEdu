@@ -7,6 +7,7 @@ import { Header } from "@/components/Header";
 import { Sidebar, NavTab } from "@/components/Sidebar";
 import { AttendanceCard, SubjectAttendance } from "@/components/AttendanceCard";
 import { ChatDrawer } from "@/components/ChatDrawer";
+import { AcademicSupportContainer } from "@/components/academic/AcademicSupportContainer";
 import {
   login,
   getDashboard,
@@ -40,6 +41,7 @@ import {
   Mail,
   UserCheck,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 
 // Dynamically import Leaflet Map to avoid SSR window errors
@@ -631,6 +633,32 @@ export default function HomePage() {
                         Dept: {user?.department || "Computer Science"}
                       </div>
                     </div>
+
+                    {/* Academic Support Quick Access */}
+                    <div
+                      onClick={() => setActiveTab("academics")}
+                      style={{
+                        background: "#F0F9FF",
+                        border: "1px solid #BAE6FD",
+                        borderRadius: "10px",
+                        padding: "18px 20px",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--color-student)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#BAE6FD")}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "0.75rem", color: "var(--color-student)", fontWeight: 700, letterSpacing: "0.04em" }}>ACADEMIC SUPPORT</span>
+                        <Sparkles size={18} color="var(--color-student)" />
+                      </div>
+                      <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--text-main)" }}>
+                        Mastery Diagnostics
+                      </div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--color-student)", marginTop: "6px", display: "flex", alignItems: "center", gap: "4px", fontWeight: 600 }}>
+                        <span>Open Marks & Notes →</span>
+                      </div>
+                    </div>
                   </>
                 ) : user?.role === "faculty" ? (
                   <>
@@ -813,6 +841,16 @@ export default function HomePage() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* ===================== TAB: ACADEMIC SUPPORT ===================== */}
+          {activeTab === "academics" && (
+            <AcademicSupportContainer
+              token={token}
+              onOpenChatWithQuery={(query) => {
+                setIsChatOpen(true);
+              }}
+            />
           )}
 
           {/* ===================== TAB: LIVE TRANSIT ===================== */}

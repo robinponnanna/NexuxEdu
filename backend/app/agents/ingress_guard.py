@@ -3,14 +3,14 @@ from typing import Tuple
 from app.models.schemas import UserSecurityClaims
 
 JAILBREAK_PATTERNS = [
-    r"ignore (all )?prior rules",
+    r"ignore (all )?(prior|previous) (rules|instructions)",
     r"act as (root|system|admin|superuser)",
     r"dan mode",
     r"jailbreak",
     r"bypass (security|rbac|permission)",
     r"developer mode",
     r"system prompt override",
-    r"reveal all (salaries|passwords|keys)"
+    r"reveal (all )?(salaries|passwords|keys|exam keys?|database password)"
 ]
 
 def check_input_guardrail(query: str, claims: UserSecurityClaims) -> Tuple[bool, str]:
