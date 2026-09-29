@@ -142,3 +142,59 @@ Where:
 | **Frontend Framework** | **Next.js 14 (App Router)** | Vite + React SPA | Server-Side Rendering (SSR) for initial load performance, built-in API proxy routing, unified TypeScript types across modules. |
 | **Interactive Mapping** | **Leaflet.js + OpenStreetMap** | Google Maps API | $100\%$ free, zero billing-card barriers, lightweight ($< 40\text{ KB}$ bundle), easy marker animation. |
 | **LLM Inference** | **Groq Cloud (Llama-3.1-70B/8B)** | Local Ollama / OpenAI | Delivers $> 300\text{ tokens/sec}$ inference speed; prevents latency stalls during live presentations to judges. |
+
+---
+
+### 4. Event–Exam Clash & Retake Rescheduling Engine
+
+To resolve schedule collisions between campus events (hackathons, symposiums) and scheduled continuous/end-term assessments, OmniCampus implements an automated detection and governance pipeline.
+
+```
+[ Admin Creates Event & Registers Participants ]
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Automated Clash Detection Engine                            │
+│ - Strict non-zero interval overlap (touching boundary ≠ clash)│
+│ - Sister-section parallel slot retake search                │
+│ - Auto-detects sister exams without conflicting with event  │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Compare-And-Set (CAS) State Machine                         │
+│ - Atomic optimistic locking: UPDATE WHERE id AND status     │
+│ - Rowcount ≠ 1 raises HTTP 409 Conflict                     │
+│ - Rejection cascades: REJECTED ──> ESCALATED_TO_HOD (atomic) │
+│ - HOD Discretionary Override & Counter-Proposal Workflows   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                 (Commit Successful Only)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Post-Commit Notification Collector & WebSockets             │
+│ - In-memory / DB notification events flushed only post-commit│
+│ - Isolated JWT channels: channel:user:{id} & channel:admin  │
+│ - Client cannot forge or query unauthorized socket channels │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### State Transition Matrix & CAS Invariants
+1. `DETECTED` $\rightarrow$ `REQUEST_FILED` (via `POST /api/v1/clashes/cases/bulk-file`)
+2. `REQUEST_FILED` $\rightarrow$ `APPROVED` (via `POST /api/v1/clashes/cases/professor-decide`)
+3. `REQUEST_FILED` $\rightarrow$ `COUNTER_PROPOSED` (via `POST /api/v1/clashes/cases/professor-decide`)
+4. `REQUEST_FILED` $\rightarrow$ `REJECTED` $\rightarrow$ `ESCALATED_TO_HOD` (atomic cascade in same transaction)
+5. `COUNTER_PROPOSED` $\rightarrow$ `APPROVED` (admin accepts counter)
+6. `COUNTER_PROPOSED` $\rightarrow$ `REQUEST_FILED` (admin sends back)
+7. `ESCALATED_TO_HOD` $\rightarrow$ `APPROVED` or `REJECTED` (HOD override with mandatory audit note)
+8. `APPROVED` $\rightarrow$ `COMPLETED` (exam slot administered)
+
+#### Critical Runtime Requirement: Working Directory
+> [!IMPORTANT]
+> **Backend Execution Directory Requirement**:
+> The backend application **MUST** be started with its current working directory set to `backend/`:
+> ```bash
+> cd backend
+> uvicorn app.main:app --reload --port 8000
+> ```
+> This ensures that relative SQLite database paths (`sqlite+aiosqlite:///./campus.db`) correctly bind to `backend/campus.db` and resolve identically across all services and seed scripts.

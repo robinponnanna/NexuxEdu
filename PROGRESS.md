@@ -198,6 +198,32 @@ This document tracks all completed implementations, active architecture mileston
   - Added `@app.get("/api/v1/health")` route in [`backend/app/main.py`](file:///home/robin/Projects/ERP/backend/app/main.py) for health check probing.
   - Confirmed all background server processes (ports 8000 and 3000) are fully stopped per user request.
 
+### [Version 1.3.0] - 2026-09-29
+#### Added
+- **Event–Exam Clash & Retake Rescheduling Engine (v1, End-to-End)**:
+  - **Relational Models & Schema**:
+    - Added tables: `events`, `event_participants`, `course_offerings`, `assessments`, `clash_cases`, `case_timeline`, `notifications`.
+    - SQLite/PostgreSQL naive UTC datetime synchronization helper (`utcnow()`) with ISO-8601 formatting strictly at API boundary.
+    - Department name normalizer (`normalize_department`) and exact-match HOD designation validator (`is_hod_designation`).
+  - **Algorithmic Clash Detection & Parallel Slot Discovery**:
+    - Implemented interval overlap engine in `clash_detector.py` (strict non-zero overlap where touching endpoints do not trigger clash).
+    - Intelligent sister section parallel slot lookup filtering out event and student exam collisions.
+  - **Transactional Compare-And-Set (CAS) State Machine**:
+    - Atomic optimistic locking on state updates: `UPDATE ... WHERE id = :id AND status = :expected_status` (rowcount != 1 raises HTTP 409 Conflict).
+    - Atomic rejection cascade: `REJECTED` immediately transitions to `ESCALATED_TO_HOD` within the same transaction, generating dual timeline audit entries.
+    - Post-commit notification collection guarantee: `NotificationCollector` flushes alerts to DB and pub/sub broker strictly after `db.commit()`.
+  - **Zero-Trust WebSocket & Real-time Notifications**:
+    - Notification channels bound strictly to JWT claims (`channel:user:{user_id}` and `channel:admin`). Non-admins attempting admin channel are disconnected with `WS_1008_POLICY_VIOLATION`.
+  - **Idempotent Scenario Seed Script & Rehearsal Test**:
+    - `seed_clash_data.py`: Seeds Cloud Computing (Prof. Smith, Sections A, B, C) and Advanced Compilers (Prof. Turing, Section A), Hackathon event, and student participants.
+    - Full end-to-end API test (`test_demo_rehearsal_e2e.py`) validating the 8-step lifecycle.
+  - **Role-Tailored Frontend Workspaces (Next.js 14 App Router)**:
+    - **Admin Event Management**: Create event, register participants, trigger detection, review clashes, bulk-file requests.
+    - **Professor Reschedule Command Center**: View filed requests, review suggested sister-section slots, propose custom slots, approve or reject with mandatory cascade to HOD.
+    - **Student My Clashes**: Live conflict status, assigned retake slot card, interactive chronological timeline audit trail.
+    - **HOD Executive Governance**: Department-wide KPI metrics, escalated cases resolution, >48-hour stuck SLA warnings, faculty workload distribution.
+    - **Notification Bell**: Auto-polling header bell with unread badge counter, popover list, and mark-as-read triggers.
+
 ### [Version 1.2.4] - 2026-09-26
 #### Added
 - **Automated Dependency Installer & Launcher (`start.sh`)**:
