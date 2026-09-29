@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserProfile } from "@/lib/api";
+import { NotificationBell } from "@/components/NotificationBell";
 import {
   ShieldCheck,
   User,
@@ -19,12 +20,13 @@ import {
 
 interface HeaderProps {
   user: UserProfile | null;
+  token?: string;
   onSwitchRole?: (email: string) => void;
   onLogout?: () => void;
   isLoading?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
+export const Header: React.FC<HeaderProps> = ({ user, token, onLogout }) => {
   const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);
 
@@ -120,7 +122,9 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
       </div>
 
       {/* Top Right Profile Section with Hover Role Display */}
-      <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+        {token && <NotificationBell token={token} />}
+
         {user && (
           <div
             id="user-profile-container"
