@@ -103,10 +103,11 @@ class BusDetails(BaseModel):
     route_name: str
     driver_name: str
     driver_phone: str
-    current_lat: float
-    current_lng: float
+    current_lat: Optional[float] = None
+    current_lng: Optional[float] = None
     speed_kmh: float = 0.0
     status: str = "Active"
+    driver_connected: bool = False
     last_updated: Optional[str] = None
     stops: List[BusStop] = Field(default_factory=list)
     waypoints: List[List[float]] = Field(default_factory=list)

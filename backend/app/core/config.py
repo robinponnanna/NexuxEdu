@@ -19,9 +19,10 @@ class Settings(BaseSettings):
     GROQ_API_KEY: Optional[str] = os.getenv("GROQ_API_KEY", None)
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY", None)
     
-    # Telemetry
+    # Telemetry & Real-Time Fleet Tracking
     TELEMETRY_INTERVAL_SECONDS: float = 3.0
     GEOFENCE_RADIUS_METERS: float = 500.0
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "http://localhost:3000")
 
     class Config:
         case_sensitive = True

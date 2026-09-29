@@ -110,11 +110,11 @@ async def test_entire_tracking_pipeline():
             # Read messages until we get bus-location-update for test coord
             for _ in range(5):
                 msg = json.loads(await asyncio.wait_for(student_ws.recv(), timeout=5.0))
-                print(f"  [Student received message]: type={msg.get('type')}, busId={msg.get('busId')}, lat={msg.get('latitude')}, lng={msg.get('longitude')}")
-                if msg.get("type") == "bus-location-update" and abs(float(msg.get("latitude", 0)) - test_lat) < 0.0001:
-                    broadcast_received = True
-                    print("✓ Student successfully received real-time bus-location-update event!")
-                    break
+                if msg.get("type") == "bus-location-update" and msg.get("latitude") is not None:
+                    if abs(float(msg.get("latitude")) - test_lat) < 0.0001:
+                        broadcast_received = True
+                        print("✓ Student successfully received real-time bus-location-update event!")
+                        break
 
             assert broadcast_received, "Student did not receive real-time bus-location-update!"
 

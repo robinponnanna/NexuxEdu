@@ -1,5 +1,8 @@
 import uuid
 import datetime
+import urllib.request
+import json
+import socket
 from typing import Optional, List, Any
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,6 +14,37 @@ from app.api.auth import get_current_user_claims
 from app.models.schemas import UserSecurityClaims
 
 router = APIRouter(prefix="/tracking", tags=["Tracking & Fleet Intelligence"])
+
+def discover_network_endpoints() -> tuple[Optional[str], str]:
+    """
+    Discovers:
+    1. Active public HTTPS tunnel (e.g., ngrok at 127.0.0.1:4040)
+    2. Local Area Network (Wi-Fi) IP address for multi-device access
+    """
+    ngrok_url = None
+    try:
+        req = urllib.request.Request("http://127.0.0.1:4040/api/tunnels", headers={"User-Agent": "NexusEdu-Server"})
+        with urllib.request.urlopen(req, timeout=0.25) as resp:
+            data = json.loads(resp.read().decode())
+            for t in data.get("tunnels", []):
+                if t.get("proto") == "https":
+                    ngrok_url = t.get("public_url")
+                    break
+                elif not ngrok_url:
+                    ngrok_url = t.get("public_url")
+    except Exception:
+        pass
+
+    lan_ip = "127.0.0.1"
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        lan_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        pass
+
+    return ngrok_url, lan_ip
 
 class CreateSessionRequest(BaseModel):
     busId: Optional[int] = Field(None, description="Bus ID to track")
@@ -34,6 +68,9 @@ class CreateSessionRequest(BaseModel):
 class CreateSessionResponse(BaseModel):
     token: str
     trackingUrl: str
+    publicUrl: Optional[str] = None
+    lanUrl: Optional[str] = None
+    localUrl: Optional[str] = None
     expiresAt: str
     busId: int
     busNumber: Optional[str] = None
@@ -46,6 +83,7 @@ async def create_tracking_session(
 ):
     """
     Admin generates a real-time driver tracking session link.
+    Automatically detects active public HTTPS tunnels and LAN endpoints so other devices can track.
     """
     # RBAC check: only admin can generate tracking sessions
     if claims and claims.role != "admin":
@@ -68,8 +106,6 @@ async def create_tracking_session(
         if not bus:
             raise HTTPException(status_code=404, detail=f"Bus with ID {bus_id} not found.")
 
-        # Deactivate any previous active sessions for this bus (optional, keeps it clean)
-        # or leave multiple active
         token = str(uuid.uuid4())
         now = datetime.datetime.utcnow()
         expires_at = now + datetime.timedelta(minutes=ttl_minutes)
@@ -88,12 +124,33 @@ async def create_tracking_session(
         session.add(tracking_session)
         await session.commit()
 
-        base_url = (settings.PUBLIC_BASE_URL or "http://localhost:3000").rstrip("/")
-        tracking_url = f"{base_url}/track?token={token}"
+        # Discover accessible network endpoints for other devices
+        ngrok_url, lan_ip = discover_network_endpoints()
+
+        # 1. Public HTTPS URL (Tunnel or explicit non-localhost PUBLIC_BASE_URL)
+        configured_public = settings.PUBLIC_BASE_URL if (
+            settings.PUBLIC_BASE_URL and "localhost" not in settings.PUBLIC_BASE_URL and "127.0.0.1" not in settings.PUBLIC_BASE_URL
+        ) else None
+        public_base = ngrok_url or configured_public
+        public_url = f"{public_base.rstrip('/')}/track?token={token}" if public_base else None
+
+        # 2. Local Wi-Fi Network URL
+        lan_url = f"http://{lan_ip}:8000/track?token={token}"
+
+        # 3. Localhost URL
+        local_url = f"http://localhost:3000/track?token={token}"
+
+        # Best trackingUrl:
+        # Prefer public HTTPS tunnel (as mobile browsers strictly require HTTPS for GPS geolocation on remote devices)
+        # Fall back to LAN, then localhost
+        tracking_url = public_url or lan_url or local_url
 
         return CreateSessionResponse(
             token=token,
             trackingUrl=tracking_url,
+            publicUrl=public_url,
+            lanUrl=lan_url,
+            localUrl=local_url,
             expiresAt=expires_at.isoformat() + "Z",
             busId=bus.id,
             busNumber=bus.bus_number,
@@ -244,6 +301,23 @@ async def handle_unified_websocket(websocket: WebSocket, token: Optional[str]):
             "status": "ready"
         })
 
+        # Register bus with transit simulator to pause synthetic simulation for this vehicle
+        try:
+            from app.services.transit_simulator import transit_simulator
+            transit_simulator.register_active_driver(bus_id)
+        except Exception:
+            pass
+
+        # Broadcast driver device connected event to all campus dashboard subscribers
+        await broker.broadcast_bus_location(bus_id, {
+            "type": "driver-status-update",
+            "busId": bus_id,
+            "busNumber": bus.bus_number,
+            "status": "online",
+            "driverConnected": True,
+            "message": f"Driver device connected for Bus {bus.bus_number}"
+        })
+
         try:
             while True:
                 data = await websocket.receive_json()
@@ -253,6 +327,8 @@ async def handle_unified_websocket(websocket: WebSocket, token: Optional[str]):
                     latitude = float(data.get("latitude"))
                     longitude = float(data.get("longitude"))
                     accuracy = float(data.get("accuracy", 10.0))
+                    speed_kmh = float(data.get("speed_kmh") or data.get("speed", 0.0) or 0.0)
+                    heading = float(data.get("heading", 0.0) or 0.0)
                     timestamp = data.get("timestamp") or int(datetime.datetime.utcnow().timestamp() * 1000)
 
                     # Update database
@@ -282,6 +358,9 @@ async def handle_unified_websocket(websocket: WebSocket, token: Optional[str]):
                         "latitude": latitude,
                         "longitude": longitude,
                         "accuracy": accuracy,
+                        "speed_kmh": speed_kmh,
+                        "heading": heading,
+                        "driverConnected": True,
                         "timestamp": timestamp,
                         "status": "Active"
                     }
@@ -302,6 +381,24 @@ async def handle_unified_websocket(websocket: WebSocket, token: Optional[str]):
             pass
         except Exception as e:
             print(f"Driver WebSocket error for bus {bus_id}: {e}")
+        finally:
+            try:
+                from app.services.transit_simulator import transit_simulator
+                transit_simulator.unregister_active_driver(bus_id)
+            except Exception:
+                pass
+            try:
+                # Broadcast driver disconnected event so dashboard reflects state change
+                await broker.broadcast_bus_location(bus_id, {
+                    "type": "driver-status-update",
+                    "busId": bus_id,
+                    "busNumber": bus.bus_number,
+                    "status": "offline",
+                    "driverConnected": False,
+                    "message": f"Driver device disconnected for Bus {bus.bus_number}"
+                })
+            except Exception:
+                pass
         return
 
     # Check 2: ERP User JWT Token

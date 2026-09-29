@@ -44,34 +44,17 @@ async def seed_database_if_empty():
         ]
 
         for i in range(1, 21):
-            lat, lng = base_coords[i - 1]
-            # Generate cyclic waypoints around base coord
-            waypoints = [
-                [lat, lng],
-                [lat + 0.005, lng + 0.007],
-                [lat + 0.012, lng + 0.010],
-                [lat + 0.015, lng + 0.003],
-                [lat + 0.008, lng - 0.005],
-                [lat - 0.004, lng - 0.003],
-                [lat, lng]
-            ]
-            stops = [
-                {"name": f"Terminal Stop {i}", "lat": lat, "lng": lng, "sequence": 1, "eta_minutes": 0},
-                {"name": f"Midtown Gate {i}", "lat": lat + 0.005, "lng": lng + 0.007, "sequence": 2, "eta_minutes": 6},
-                {"name": f"Civic Center {i}", "lat": lat + 0.012, "lng": lng + 0.010, "sequence": 3, "eta_minutes": 14},
-                {"name": f"Campus Main Arch {i}", "lat": lat, "lng": lng, "sequence": 4, "eta_minutes": 22}
-            ]
             bus = Bus(
                 bus_number=f"BUS-{i:03d}",
                 route_name=route_names[i - 1],
                 driver_name=f"Driver Dave #{i}" if i == 1 else f"Captain Raj #{i}",
                 driver_phone=f"+91-9876543{i:03d}",
-                current_lat=lat,
-                current_lng=lng,
-                speed_kmh=38.0 if i == 1 else 32.5 + (i % 8),
+                current_lat=None,
+                current_lng=None,
+                speed_kmh=0.0,
                 status="Active" if i % 6 != 0 else "Congestion Delay",
-                stops_json=json.dumps(stops),
-                waypoints_json=json.dumps(waypoints)
+                stops_json="[]",
+                waypoints_json="[]"
             )
             session.add(bus)
             buses.append(bus)
