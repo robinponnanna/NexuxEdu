@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import List, Optional, Dict, Any
 import datetime
+import json
 
 from app.api.auth import get_current_user_claims
+from app.core.security import decode_access_token
+from app.core.pubsub import broker
 from app.core.database import (
     get_db_session,
     Event,
@@ -759,3 +762,59 @@ async def mark_all_notifications_read(
     await db.execute(stmt)
     await db.commit()
     return {"status": "success"}
+
+async def handle_notifications_websocket(websocket: WebSocket, token: Optional[str] = None, as_admin: bool = False):
+    """
+    Real-time Notification WebSocket.
+    Rule 7: Channel is strictly derived from verified JWT, never client input.
+    Only admins may subscribe to the admin channel.
+    """
+    await websocket.accept()
+
+    if not token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Missing auth token")
+        return
+
+    payload = decode_access_token(token)
+    if not payload:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
+        return
+
+    user_id = payload.get("user_id")
+    user_role = payload.get("role")
+
+    if not user_id:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Missing user identity")
+        return
+
+    # Derive channel strictly from verified JWT claims
+    if as_admin:
+        if user_role != "admin":
+            await websocket.send_json({"error": "Forbidden: Only admins may subscribe to the admin channel."})
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Admin channel restricted")
+            return
+        channel = "channel:admin"
+    else:
+        channel = f"channel:user:{user_id}"
+
+    queue = await broker.subscribe(channel)
+    try:
+        await websocket.send_json({"type": "CONNECTED", "channel": channel, "user_id": user_id, "role": user_role})
+        while True:
+            raw_msg = await queue.get()
+            if isinstance(raw_msg, str):
+                data = json.loads(raw_msg)
+            else:
+                data = raw_msg
+            await websocket.send_json(data)
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        pass
+    finally:
+        await broker.unsubscribe(channel, queue)
+
+@router.websocket("/ws")
+async def clash_notifications_ws(websocket: WebSocket, token: Optional[str] = Query(None), as_admin: bool = Query(False)):
+    await handle_notifications_websocket(websocket, token, as_admin)
+

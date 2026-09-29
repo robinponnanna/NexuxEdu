@@ -46,12 +46,18 @@ app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(chat_router, prefix=settings.API_V1_STR)
 app.include_router(transit_router, prefix=settings.API_V1_STR)
 app.include_router(erp_router, prefix=settings.API_V1_STR)
+from app.api.clash import router as clash_router, handle_notifications_websocket
 app.include_router(clash_router, prefix=settings.API_V1_STR)
 
 # Top-level WebSocket alias as specified in SYSTEM_DESIGN: /ws/transit/{bus_id}
 @app.websocket("/ws/transit/{bus_id}")
 async def ws_transit_alias(websocket: WebSocket, bus_id: int, token: Optional[str] = Query(None)):
     await handle_transit_websocket(websocket, bus_id, token)
+
+# Top-level WebSocket alias for notifications: /ws/notifications
+@app.websocket("/ws/notifications")
+async def ws_notifications_alias(websocket: WebSocket, token: Optional[str] = Query(None), as_admin: bool = Query(False)):
+    await handle_notifications_websocket(websocket, token, as_admin)
 
 @app.get("/health")
 @app.get(f"{settings.API_V1_STR}/health")
