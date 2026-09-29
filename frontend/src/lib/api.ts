@@ -188,3 +188,333 @@ export async function getFacultyClassAttendance(
   if (!res.ok) throw new Error("Failed to fetch faculty class attendance roster");
   return res.json();
 }
+
+// ============================================================
+// STUDENT ACADEMIC SUPPORT TYPES & CLIENT METHODS
+// ============================================================
+
+export interface ExtremeModuleInfo {
+  id: number;
+  module_number: number;
+  co_code: string;
+  title: string;
+  marks_obtained: number;
+  marks_available: number;
+  percentage: number;
+  status: "Strong" | "Developing" | "Needs Support" | "No Data";
+}
+
+export interface StudentSubjectSummary {
+  id: number;
+  code: string;
+  name: string;
+  department: string;
+  semester: number;
+  credits: number;
+  total_marks_obtained: number;
+  total_marks_available: number;
+  percentage: number;
+  status: "Strong" | "Developing" | "Needs Support" | "No Data";
+  strongest_module?: ExtremeModuleInfo | null;
+  weakest_module?: ExtremeModuleInfo | null;
+}
+
+export interface StudentMarksOverviewResponse {
+  student_id: number;
+  student_name: string;
+  roll_number: string;
+  semester: number;
+  overall_percentage: number;
+  total_credits: number;
+  subjects: StudentSubjectSummary[];
+}
+
+export interface QuestionMarkDetail {
+  id?: number;
+  question_id: number;
+  question_label: string;
+  co_code: string;
+  max_marks: number;
+  marks_obtained: number;
+  is_attempted: boolean;
+  or_group_id?: string | null;
+  feedback?: string | null;
+}
+
+export interface SubjectAssessmentDetail {
+  id: number;
+  category: "CA1" | "CA2" | "CA3" | "Midterm" | "Endterm";
+  name: string;
+  max_marks: number;
+  weightage_pct: number;
+  assessment_date?: string | null;
+  marks_obtained: number;
+  marks_available: number;
+  percentage: number;
+  questions: QuestionMarkDetail[];
+}
+
+export interface SubjectModuleMarksDetail {
+  id: number;
+  module_number: number;
+  co_code: string;
+  title: string;
+  description?: string | null;
+  marks_obtained: number;
+  marks_available: number;
+  percentage: number;
+  status: "Strong" | "Developing" | "Needs Support" | "No Data";
+}
+
+export interface SubjectMarksDetailResponse {
+  subject: {
+    id: number;
+    code: string;
+    name: string;
+    department: string;
+    semester: number;
+    credits: number;
+    modules: {
+      id: number;
+      module_number: number;
+      co_code: string;
+      title: string;
+      description?: string | null;
+    }[];
+  };
+  total_marks_obtained: number;
+  total_marks_available: number;
+  percentage: number;
+  status: "Strong" | "Developing" | "Needs Support" | "No Data";
+  assessments: SubjectAssessmentDetail[];
+  modules: SubjectModuleMarksDetail[];
+  strongest_module?: ExtremeModuleInfo | null;
+  weakest_module?: ExtremeModuleInfo | null;
+}
+
+export interface SubjectModulesAnalysisResponse {
+  subject_id: number;
+  subject_code: string;
+  subject_name: string;
+  modules: SubjectModuleMarksDetail[];
+  strongest_module?: ExtremeModuleInfo | null;
+  weakest_module?: ExtremeModuleInfo | null;
+}
+
+export interface MaterialPageDetail {
+  id: number;
+  page_number: number;
+  page_title: string;
+  content_text: string;
+  structured_json?: string | null;
+}
+
+export interface LearningMaterialDetail {
+  id: number;
+  subject_id: number;
+  subject_code?: string | null;
+  subject_name?: string | null;
+  module_id?: number | null;
+  co_code?: string | null;
+  title: string;
+  source_reference?: string | null;
+  total_pages: number;
+  pages: MaterialPageDetail[];
+}
+
+export interface AcademicSourceCitation {
+  material_id: number;
+  title: string;
+  page_number: number;
+  topic: string;
+  co_code?: string | null;
+  subject_code?: string | null;
+}
+
+export interface MicroLessonScene {
+  scene_id: number;
+  type?: "concept" | "diagram" | "example" | "comparison" | "flow" | "common_mistake" | "formula" | "takeaway";
+  visual_type?: string;
+  title: string;
+  duration_seconds: number;
+  narration?: string;
+  body?: string;
+  visual_data?: any;
+  diagram?: {
+    type?: string;
+    nodes?: { id: string; label: string }[];
+    edges?: { from: string; to: string; label?: string }[];
+  };
+  key_takeaway?: string;
+}
+
+export interface MicroLessonPayload {
+  id?: number;
+  subject_id?: number;
+  subject_code?: string | null;
+  subject_name?: string | null;
+  module_id?: number | null;
+  co_code?: string | null;
+  topic_key?: string;
+  title: string;
+  topic?: string;
+  difficulty?: string;
+  duration_seconds: number;
+  objective?: string;
+  scenes: MicroLessonScene[];
+  sources: AcademicSourceCitation[];
+}
+
+export interface ModuleLearningMaterialResponse {
+  module_id: number;
+  module_number: number;
+  co_code: string;
+  module_title: string;
+  subject_id: number;
+  subject_code: string;
+  subject_name: string;
+  materials: LearningMaterialDetail[];
+  total_chunks: number;
+  micro_lessons: MicroLessonPayload[];
+}
+
+export interface AcademicExplainRequest {
+  selected_text: string;
+  material_id?: number;
+  module_id?: number;
+  subject_id?: number;
+  page_number?: number;
+  co_code?: string;
+  topic?: string;
+}
+
+export interface GenerationMetadata {
+  mode: "cache" | "fallback" | "live";
+  model: string;
+  cached: boolean;
+  latency_ms: number;
+}
+
+export interface AcademicExplainResponse {
+  status: string;
+  lesson: MicroLessonPayload;
+  source_context?: {
+    subject_code?: string;
+    subject_name?: string;
+    module_title?: string;
+    co_code?: string;
+    material_title?: string;
+    page_number?: number;
+    retrieved_chunks_count?: number;
+  };
+  generation: GenerationMetadata;
+}
+
+// Academic Support API Calls
+export async function getStudentSubjects(
+  token: string,
+  semester?: number,
+  status?: string
+): Promise<StudentSubjectSummary[]> {
+  const apiBase = getApiBase();
+  const params = new URLSearchParams();
+  if (semester) params.append("semester", semester.toString());
+  if (status && status !== "all") params.append("performance_status", status);
+
+  const queryStr = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${apiBase}/student/subjects${queryStr}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch student subjects (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function getStudentMarksOverview(
+  token: string,
+  semester?: number,
+  status?: string
+): Promise<StudentMarksOverviewResponse> {
+  const apiBase = getApiBase();
+  const params = new URLSearchParams();
+  if (semester) params.append("semester", semester.toString());
+  if (status && status !== "all") params.append("performance_status", status);
+
+  const queryStr = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${apiBase}/student/marks${queryStr}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch student marks overview (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function getSubjectMarksDetail(
+  token: string,
+  subjectId: number
+): Promise<SubjectMarksDetailResponse> {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/student/marks/${subjectId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch subject marks detail (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function getSubjectModulesAnalysis(
+  token: string,
+  subjectId: number
+): Promise<SubjectModulesAnalysisResponse> {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/student/marks/${subjectId}/modules`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch subject modules analysis (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function getModuleLearningMaterials(
+  token: string,
+  moduleId: number
+): Promise<ModuleLearningMaterialResponse> {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/student/learning/materials/${moduleId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch learning materials (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function explainAcademicConcept(
+  token: string,
+  payload: AcademicExplainRequest
+): Promise<AcademicExplainResponse> {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/student/learning/explain`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Concept explanation failed (${res.status})`);
+  }
+  return res.json();
+}
+

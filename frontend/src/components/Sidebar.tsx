@@ -2,9 +2,9 @@
 
 import React from "react";
 import { UserProfile } from "@/lib/api";
-import { LayoutDashboard, Bus, UserCheck, ShieldAlert } from "lucide-react";
+import { LayoutDashboard, Bus, UserCheck, ShieldAlert, GraduationCap } from "lucide-react";
 
-export type NavTab = "dashboard" | "transit" | "attendance" | "policies" | "audits";
+export type NavTab = "dashboard" | "academics" | "transit" | "attendance" | "policies" | "audits";
 
 interface SidebarProps {
   user: UserProfile | null;
@@ -18,6 +18,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, activeTab, onSelectTab }
 
   const navItems: { id: NavTab; label: string; icon: React.ComponentType<{ size: number; color?: string }>; visible: boolean }[] = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, visible: true },
+    { id: "academics", label: "Academic Support", icon: GraduationCap, visible: role === "student" || role === "parent" },
     { id: "transit", label: "Live Transit", icon: Bus, visible: role === "student" || role === "parent" || role === "admin" },
     { id: "attendance", label: role === "faculty" ? "Class Roster" : "Attendance Tracker", icon: UserCheck, visible: true },
     { id: "audits", label: "Security Audits", icon: ShieldAlert, visible: role === "admin" },

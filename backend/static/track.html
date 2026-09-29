@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NexusEdu Driver Transit Telemetry</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #090D16;
+      color: #F8FAFC;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+    }
+    .container { max-width: 460px; width: 100%; display: flex; flex-direction: column; gap: 16px; }
+    .card {
+      background: rgba(19, 26, 41, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .badge-online { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #34D399; }
+    .badge-offline { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #F87171; }
+    .pulse-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: #10B981;
+      box-shadow: 0 0 10px #10B981;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.2); }
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .stat-box {
+      background: #090D16;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .stat-label { font-size: 0.7rem; color: #64748B; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+    .stat-value { font-size: 1.15rem; font-weight: 700; font-family: monospace; color: #60A5FA; }
+    .btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #FFF;
+      background: #6366F1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div>
+          <h2 id="busNumber" style="font-size: 1.2rem; color: #FFF;">Loading bus...</h2>
+          <div id="routeName" style="font-size: 0.8rem; color: #94A3B8;">Connecting to telemetry server</div>
+        </div>
+        <div id="statusBadge" class="badge badge-offline">CONNECTING...</div>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #94A3B8; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
+        <span>Driver: <strong id="driverName" style="color:#FFF;">—</strong></span>
+        <span>Interval: <strong style="color:#34D399;">2.0s Telemetry</strong></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+        <div id="pulseDot" class="pulse-dot"></div>
+        <div>
+          <div id="streamingTitle" style="font-weight: 700; font-size: 0.95rem;">Streaming Telemetry</div>
+          <div id="packetsCount" style="font-size: 0.75rem; color: #94A3B8;">Transmitted 0 position updates</div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 16px;">
+        <div class="stat-box">
+          <div class="stat-label">Latitude</div>
+          <div class="stat-value" id="latVal">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Longitude</div>
+          <div class="stat-value" id="lngVal">—</div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; font-size: 0.8rem; color: #94A3B8;">
+        <div>Accuracy: <strong id="accVal" style="color: #34D399;">—</strong></div>
+        <div>Last Sync: <strong id="syncVal" style="color: #F8FAFC;">—</strong></div>
+      </div>
+    </div>
+
+    <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <div style="font-size: 0.85rem; font-weight: 600;">Desktop Simulator</div>
+        <div style="font-size: 0.72rem; color: #94A3B8;">Emulate movement for testing</div>
+      </div>
+      <button id="simBtn" class="btn" style="background: rgba(255,255,255,0.1);">Start Simulator</button>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+
+      if (!token) {
+        document.body.innerHTML = '<div style="color: #EF4444; padding: 40px; text-align: center;"><h2>Missing Token</h2><p>Provide a valid ?token= parameter.</p></div>';
+        return;
+      }
+
+      let socket = null;
+      let watchId = null;
+      let lastSendTime = 0;
+      let packetsSent = 0;
+      let isSimulating = false;
+      let simInterval = null;
+      const MIN_INTERVAL_MS = 2000;
+
+      // 1. Fetch metadata
+      fetch('/api/tracking/sessions/validate?token=' + encodeURIComponent(token))
+        .then(r => {
+          if (!r.ok) throw new Error('Invalid or expired session');
+          return r.json();
+        })
+        .then(data => {
+          document.getElementById('busNumber').innerText = data.busNumber;
+          document.getElementById('routeName').innerText = data.routeName;
+          document.getElementById('driverName').innerText = data.driverName;
+          connectSocket(token, data);
+        })
+        .catch(err => {
+          document.getElementById('statusBadge').innerText = 'EXPIRED';
+          document.getElementById('statusBadge').className = 'badge badge-offline';
+          alert(err.message);
+        });
+
+      function connectSocket(tok, busData) {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        let host = window.location.host;
+        socket = new WebSocket(proto + '//' + host + '/ws?token=' + encodeURIComponent(tok));
+
+        socket.onopen = () => {
+          document.getElementById('statusBadge').innerText = 'STREAMING ACTIVE';
+          document.getElementById('statusBadge').className = 'badge badge-online';
+          startLocationTracking(busData);
+        };
+
+        socket.onclose = () => {
+          document.getElementById('statusBadge').innerText = 'DISCONNECTED';
+          document.getElementById('statusBadge').className = 'badge badge-offline';
+          setTimeout(() => connectSocket(tok, busData), 3000);
+        };
+      }
+
+      function sendLocation(lat, lng, acc) {
+        const now = Date.now();
+        if (now - lastSendTime < MIN_INTERVAL_MS) return;
+        lastSendTime = now;
+
+        const payload = {
+          type: 'location',
+          latitude: parseFloat(lat.toFixed(6)),
+          longitude: parseFloat(lng.toFixed(6)),
+          accuracy: parseFloat(acc.toFixed(1)),
+          timestamp: now
+        };
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify(payload));
+          packetsSent++;
+          document.getElementById('packetsCount').innerText = 'Transmitted ' + packetsSent + ' position updates';
+          document.getElementById('latVal').innerText = payload.latitude.toFixed(6);
+          document.getElementById('lngVal').innerText = payload.longitude.toFixed(6);
+          document.getElementById('accVal').innerText = '±' + Math.round(acc) + 'm';
+          document.getElementById('syncVal').innerText = 'Just now';
+        }
+      }
+
+      function startLocationTracking(busData) {
+        if (!navigator.geolocation) return;
+
+        watchId = navigator.geolocation.watchPosition(
+          pos => {
+            if (!isSimulating) {
+              sendLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+            }
+          },
+          err => console.warn('Geolocation warning:', err),
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+      }
+
+      // Simulator button for local desktop tests
+      const simBtn = document.getElementById('simBtn');
+      simBtn.onclick = () => {
+        isSimulating = !isSimulating;
+        if (isSimulating) {
+          simBtn.innerText = 'Stop Simulator';
+          simBtn.style.background = '#8B5CF6';
+          let lat = 28.6139;
+          let lng = 77.2090;
+          simInterval = setInterval(() => {
+            lat += (Math.random() - 0.48) * 0.0003;
+            lng += (Math.random() - 0.48) * 0.0003;
+            sendLocation(lat, lng, 10.0);
+          }, MIN_INTERVAL_MS);
+        } else {
+          simBtn.innerText = 'Start Simulator';
+          simBtn.style.background = 'rgba(255,255,255,0.1)';
+          clearInterval(simInterval);
+        }
+      };
+    })();
+  </script>
+</body>
+</html>

@@ -5,11 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import init_db
 from app.services.seed_data import seed_database_if_empty
+from app.services.seed_academic_data import seed_academic_support_data
 from app.services.transit_simulator import transit_simulator
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.transit import router as transit_router, handle_transit_websocket
 from app.api.erp import router as erp_router
+from app.api.student_academic import router as student_academic_router
 from fastapi import WebSocket, Query
 from typing import Optional
 
@@ -18,6 +20,7 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize Database tables and seed demo records
     await init_db()
     await seed_database_if_empty()
+    await seed_academic_support_data()
     # Start live transit telemetry simulator
     await transit_simulator.start()
     yield
@@ -45,6 +48,7 @@ app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(chat_router, prefix=settings.API_V1_STR)
 app.include_router(transit_router, prefix=settings.API_V1_STR)
 app.include_router(erp_router, prefix=settings.API_V1_STR)
+app.include_router(student_academic_router, prefix=settings.API_V1_STR)
 
 # Top-level WebSocket alias as specified in SYSTEM_DESIGN: /ws/transit/{bus_id}
 @app.websocket("/ws/transit/{bus_id}")
