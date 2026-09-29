@@ -53,6 +53,7 @@ def _queue_notification(
     body: str,
     case_id: Optional[int] = None,
     event_id: Optional[int] = None,
+    push_to_admin: bool = False,
 ) -> Notification:
     notif = Notification(
         user_id=target_user_id,
@@ -65,15 +66,18 @@ def _queue_notification(
         created_at=utcnow(),
     )
     db.add(notif)
-    collector.queue_publish(f"channel:user:{target_user_id}", {
-        "id": None, # Will be persisted post-commit
+    msg = {
+        "id": None,
         "type": notif_type,
         "title": title,
         "body": body,
         "case_id": case_id,
         "event_id": event_id,
         "created_at": to_iso_z(utcnow()),
-    })
+    }
+    collector.queue_publish(f"channel:user:{target_user_id}", msg)
+    if push_to_admin:
+        collector.queue_publish("channel:admin", msg)
     return notif
 
 async def get_hod_user_ids(db: AsyncSession, department: str) -> List[int]:
