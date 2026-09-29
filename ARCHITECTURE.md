@@ -197,4 +197,4 @@ To resolve schedule collisions between campus events (hackathons, symposiums) an
 > cd backend
 > uvicorn app.main:app --reload --port 8000
 > ```
-> This ensures that relative SQLite database paths (`sqlite+aiosqlite:///./campus.db`) correctly bind to `backend/campus.db` and resolve identically across all services and seed scripts.
+> This ensures that relative SQLite database paths (`sqlite+aiosqlite:///./campus.db`) correctly bind to `backend/campus.db` and resolve identically across all services and seed scripts.
