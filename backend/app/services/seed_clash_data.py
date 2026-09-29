@@ -1,6 +1,8 @@
 import datetime
 import uuid
-from sqlalchemy import select
+import sys
+import argparse
+from sqlalchemy import select, delete
 from app.core.database import (
     AsyncSessionLocal,
     User,
@@ -10,12 +12,38 @@ from app.core.database import (
     EventParticipant,
     CourseOffering,
     Assessment,
+    ClashCase,
+    CaseTimeline,
+    Notification,
 )
 from app.core.datetime_utils import utcnow
 from app.core.security import hash_password
 from app.services.clash_detector import detect_clashes_for_event
 
-async def seed_clash_scenario():
+async def reset_clash_scenario_data(session):
+    """
+    Deletes ONLY clash-feature rows:
+    - notifications
+    - case_timelines
+    - clash_cases
+    - assessments
+    - course_offerings
+    - event_participants
+    - events
+    Leaves all core tables (users, faculty, students, parents, buses, attendance, document_embeddings, audit_logs) untouched.
+    """
+    print("Resetting clash-feature tables...")
+    await session.execute(delete(Notification))
+    await session.execute(delete(CaseTimeline))
+    await session.execute(delete(ClashCase))
+    await session.execute(delete(Assessment))
+    await session.execute(delete(CourseOffering))
+    await session.execute(delete(EventParticipant))
+    await session.execute(delete(Event))
+    await session.flush()
+    print("Clash-feature tables reset completed.")
+
+async def seed_clash_scenario(reset: bool = False):
     """
     Idempotent seed script for the Event-Exam Clash & Retake Rescheduling feature:
     - 1 HOD (Prof. Dave, Computer Science)
@@ -27,16 +55,19 @@ async def seed_clash_scenario():
     - Automatically detects initial clashes
     """
     async with AsyncSessionLocal() as session:
+        if reset:
+            await reset_clash_scenario_data(session)
+
         # Check if already seeded
         existing_event = (
             await session.execute(select(Event).where(Event.title == "Smart Campus Hackathon 2026"))
         ).scalar_one_or_none()
         if existing_event:
-            print("Clash scenario already seeded. Skipping.")
+            print("Clash scenario already seeded. Skipping. Use --reset to re-seed from scratch.")
             return
 
         print("Seeding Event-Exam Clash scenario...")
-        pwd_hash = hash_password("campus123")
+        pwd_hash = hash_password("password123")
         now = utcnow()
 
         # 1. Admin
@@ -54,6 +85,8 @@ async def seed_clash_scenario():
             )
             session.add(admin)
             await session.flush()
+        else:
+            admin.password_hash = pwd_hash
 
         # 2. HOD
         hod_user = (
@@ -70,6 +103,8 @@ async def seed_clash_scenario():
             )
             session.add(hod_user)
             await session.flush()
+        else:
+            hod_user.password_hash = pwd_hash
 
         hod_fac = (
             await session.execute(select(Faculty).where(Faculty.user_id == hod_user.id))
@@ -100,6 +135,8 @@ async def seed_clash_scenario():
             )
             session.add(prof1_user)
             await session.flush()
+        else:
+            prof1_user.password_hash = pwd_hash
 
         prof1_fac = (
             await session.execute(select(Faculty).where(Faculty.user_id == prof1_user.id))
@@ -130,6 +167,8 @@ async def seed_clash_scenario():
             )
             session.add(prof2_user)
             await session.flush()
+        else:
+            prof2_user.password_hash = pwd_hash
 
         prof2_fac = (
             await session.execute(select(Faculty).where(Faculty.user_id == prof2_user.id))
@@ -152,6 +191,8 @@ async def seed_clash_scenario():
             jane_user = User(public_id=str(uuid.uuid4()), name="Jane Doe", email="student@campus.edu", password_hash=pwd_hash, role="student", created_at=now)
             session.add(jane_user)
             await session.flush()
+        else:
+            jane_user.password_hash = pwd_hash
         jane_stud = (await session.execute(select(Student).where(Student.user_id == jane_user.id))).scalar_one_or_none()
         if not jane_stud:
             jane_stud = Student(user_id=jane_user.id, roll_number="CS-2023-042", department="Computer Science", semester=6, section="Section A")
@@ -165,6 +206,8 @@ async def seed_clash_scenario():
             alex_user = User(public_id=str(uuid.uuid4()), name="Alex Smith", email="alex@campus.edu", password_hash=pwd_hash, role="student", created_at=now)
             session.add(alex_user)
             await session.flush()
+        else:
+            alex_user.password_hash = pwd_hash
         alex_stud = (await session.execute(select(Student).where(Student.user_id == alex_user.id))).scalar_one_or_none()
         if not alex_stud:
             alex_stud = Student(user_id=alex_user.id, roll_number="CS-2023-088", department="Computer Science", semester=6, section="Section B")
@@ -178,6 +221,8 @@ async def seed_clash_scenario():
             maya_user = User(public_id=str(uuid.uuid4()), name="Maya Patel", email="maya@campus.edu", password_hash=pwd_hash, role="student", created_at=now)
             session.add(maya_user)
             await session.flush()
+        else:
+            maya_user.password_hash = pwd_hash
         maya_stud = (await session.execute(select(Student).where(Student.user_id == maya_user.id))).scalar_one_or_none()
         if not maya_stud:
             maya_stud = Student(user_id=maya_user.id, roll_number="CS-2023-105", department="Computer Science", semester=6, section="Section C")
@@ -189,6 +234,8 @@ async def seed_clash_scenario():
             liam_user = User(public_id=str(uuid.uuid4()), name="Liam Chen", email="liam@campus.edu", password_hash=pwd_hash, role="student", created_at=now)
             session.add(liam_user)
             await session.flush()
+        else:
+            liam_user.password_hash = pwd_hash
         liam_stud = (await session.execute(select(Student).where(Student.user_id == liam_user.id))).scalar_one_or_none()
         if not liam_stud:
             liam_stud = Student(user_id=liam_user.id, roll_number="CS-2023-019", department="Computer Science", semester=6, section="Section A")
@@ -299,4 +346,7 @@ async def seed_clash_scenario():
 
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(seed_clash_scenario())
+    parser = argparse.ArgumentParser(description="Seed Event-Exam Clash scenario data")
+    parser.add_argument("--reset", action="store_true", help="Delete only clash-feature rows and re-seed from clean")
+    args = parser.parse_args()
+    asyncio.run(seed_clash_scenario(reset=args.reset))
