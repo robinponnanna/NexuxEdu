@@ -4,7 +4,16 @@ import React from "react";
 import { UserProfile } from "@/lib/api";
 import { LayoutDashboard, Bus, UserCheck, ShieldAlert } from "lucide-react";
 
-export type NavTab = "dashboard" | "transit" | "attendance" | "policies" | "audits";
+export type NavTab =
+  | "dashboard"
+  | "transit"
+  | "attendance"
+  | "policies"
+  | "audits"
+  | "events"
+  | "reschedule"
+  | "clashes"
+  | "hod_dashboard";
 
 interface SidebarProps {
   user: UserProfile | null;
@@ -15,9 +24,14 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ user, activeTab, onSelectTab }) => {
   const role = user?.role || "student";
+  const isHOD = !!user?.is_hod;
 
   const navItems: { id: NavTab; label: string; icon: React.ComponentType<{ size: number; color?: string }>; visible: boolean }[] = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, visible: true },
+    { id: "events", label: "Event Clashes", icon: ShieldAlert, visible: role === "admin" },
+    { id: "reschedule", label: "Retake Requests", icon: UserCheck, visible: role === "faculty" },
+    { id: "hod_dashboard", label: "HOD Governance", icon: ShieldAlert, visible: role === "faculty" && isHOD },
+    { id: "clashes", label: "My Clashes", icon: UserCheck, visible: role === "student" },
     { id: "transit", label: "Live Transit", icon: Bus, visible: role === "student" || role === "parent" || role === "admin" },
     { id: "attendance", label: role === "faculty" ? "Class Roster" : "Attendance Tracker", icon: UserCheck, visible: true },
     { id: "audits", label: "Security Audits", icon: ShieldAlert, visible: role === "admin" },
