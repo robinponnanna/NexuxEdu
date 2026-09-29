@@ -256,10 +256,13 @@ export interface EventDetailItem extends EventItem {
 
 export interface HODOverview {
   department: string;
+  total_cases?: number;
+  by_status?: Record<string, number>;
   counts_by_status: Record<string, number>;
   escalated_cases: ClashCaseItem[];
   stuck_cases: ClashCaseItem[];
-  per_professor_pending: Record<string, number>;
+  per_professor_pending?: Record<string, number>;
+  pending_per_professor?: Record<string, number>;
 }
 
 export interface NotificationItem {

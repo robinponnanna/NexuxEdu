@@ -7,10 +7,12 @@ import { Clock, User } from "lucide-react";
 
 interface TimelineViewProps {
   timeline?: CaseTimelineEntry[];
+  entries?: CaseTimelineEntry[];
 }
 
-export const TimelineView: React.FC<TimelineViewProps> = ({ timeline = [] }) => {
-  if (!timeline || timeline.length === 0) {
+export const TimelineView: React.FC<TimelineViewProps> = ({ timeline, entries }) => {
+  const list = timeline || entries || [];
+  if (!list || list.length === 0) {
     return (
       <div
         style={{
@@ -25,7 +27,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({ timeline = [] }) => 
     );
   }
 
-  const sorted = [...timeline].sort(
+  const sorted = [...list].sort(
     (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
   );
 

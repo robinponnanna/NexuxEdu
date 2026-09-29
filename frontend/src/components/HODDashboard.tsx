@@ -5,8 +5,8 @@ import {
   HODOverview,
   ClashCaseItem,
   getHODOverview,
-  hodOverride,
-  getCaseTimeline,
+  hodOverrideCase,
+  getClashCaseDetail,
   CaseTimelineEntry,
 } from "@/lib/api";
 import { StatusChip } from "./StatusChip";
@@ -24,6 +24,7 @@ import {
   ArrowRight,
   X,
   Building,
+  MapPin,
 } from "lucide-react";
 
 interface HODDashboardProps {
@@ -39,7 +40,11 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
   const [selectedCase, setSelectedCase] = useState<ClashCaseItem | null>(null);
   const [overrideDecision, setOverrideDecision] = useState<"APPROVED" | "REJECTED">("APPROVED");
   const [overrideSlotId, setOverrideSlotId] = useState<number | null>(null);
-  const [customSlot, setCustomSlot] = useState<string>("");
+  
+  // Specific Datetime and Venue fields (replacing free-text string requirement)
+  const [customDateTime, setCustomDateTime] = useState<string>("");
+  const [customVenue, setCustomVenue] = useState<string>("");
+  
   const [overrideNote, setOverrideNote] = useState<string>("");
   const [submittingOverride, setSubmittingOverride] = useState<boolean>(false);
   const [overrideError, setOverrideError] = useState<string | null>(null);
@@ -72,7 +77,7 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
     setTimelineCase(c);
     setTimelineLoading(true);
     try {
-      const res = await getCaseTimeline(token, c.id);
+      const res = await getClashCaseDetail(token, c.id);
       setTimelineEntries(res.timeline || []);
     } catch (e: any) {
       console.error("Failed to load timeline", e);
@@ -84,8 +89,9 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
   const handleOpenOverride = (c: ClashCaseItem) => {
     setSelectedCase(c);
     setOverrideDecision("APPROVED");
-    setOverrideSlotId(c.suggested_slot_id || null);
-    setCustomSlot("");
+    setOverrideSlotId(c.suggested_retake_assessment_id || null);
+    setCustomDateTime("");
+    setCustomVenue("");
     setOverrideNote("");
     setOverrideError(null);
   };
@@ -97,14 +103,30 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
       return;
     }
 
+    if (overrideDecision === "APPROVED" && !overrideSlotId && !customDateTime) {
+      setOverrideError("Please assign a slot or select a custom date & time.");
+      return;
+    }
+
     setSubmittingOverride(true);
     setOverrideError(null);
     try {
-      await hodOverride(token, selectedCase.id, {
-        decision: overrideDecision,
-        rescheduled_slot_id: overrideSlotId || undefined,
-        custom_rescheduled_slot: customSlot.trim() || undefined,
-        hod_note: overrideNote.trim(),
+      // Build ISO string if custom date provided
+      let formattedCustomAt: string | undefined = undefined;
+      if (customDateTime) {
+        formattedCustomAt = new Date(customDateTime).toISOString();
+      }
+
+      // Append venue to note if specified
+      let finalNote = overrideNote.trim();
+      if (customVenue.trim()) {
+        finalNote = `${finalNote} [Venue: ${customVenue.trim()}]`;
+      }
+
+      await hodOverrideCase(token, selectedCase.id, {
+        slot_id: overrideSlotId || undefined,
+        custom_at: formattedCustomAt,
+        note: finalNote,
       });
       setSelectedCase(null);
       await fetchOverview();
@@ -114,6 +136,11 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
       setSubmittingOverride(false);
     }
   };
+
+  const totalCasesCount = overview?.total_cases ?? Object.values(overview?.counts_by_status || {}).reduce((a, b) => a + b, 0);
+  const escalatedCount = overview?.counts_by_status?.["ESCALATED_TO_HOD"] ?? overview?.escalated_cases?.length ?? 0;
+  const stuckCount = overview?.stuck_cases?.length ?? 0;
+  const profPendingMap = overview?.pending_per_professor || overview?.per_professor_pending || {};
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "22px" }}>
@@ -209,7 +236,7 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
         <div style={{ background: "var(--surface-card)", border: "1px solid var(--surface-border)", borderRadius: "8px", padding: "16px 18px" }}>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>TOTAL CLASH CASES</div>
           <div className="font-mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-main)", marginTop: "4px" }}>
-            {overview?.total_cases ?? 0}
+            {totalCasesCount}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "4px" }}>Department-wide scope</div>
         </div>
@@ -217,7 +244,7 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
         <div style={{ background: "var(--surface-card)", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: "8px", padding: "16px 18px" }}>
           <div style={{ fontSize: "0.72rem", color: "var(--color-danger)", fontWeight: 700, letterSpacing: "0.04em" }}>ESCALATED TO HOD</div>
           <div className="font-mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--color-danger)", marginTop: "4px" }}>
-            {overview?.escalated_count ?? 0}
+            {escalatedCount}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>Awaiting executive override</div>
         </div>
@@ -225,7 +252,7 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
         <div style={{ background: "var(--surface-card)", border: "1px solid rgba(245, 158, 11, 0.3)", borderRadius: "8px", padding: "16px 18px" }}>
           <div style={{ fontSize: "0.72rem", color: "var(--color-warning)", fontWeight: 700, letterSpacing: "0.04em" }}>STUCK CASES (&gt;48H)</div>
           <div className="font-mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--color-warning)", marginTop: "4px" }}>
-            {overview?.stuck_count ?? 0}
+            {stuckCount}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>Pending professor action</div>
         </div>
@@ -233,7 +260,7 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
         <div style={{ background: "var(--surface-card)", border: "1px solid var(--surface-border)", borderRadius: "8px", padding: "16px 18px" }}>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>FACULTY MEMBERS</div>
           <div className="font-mono" style={{ fontSize: "1.7rem", fontWeight: 700, color: "var(--text-main)", marginTop: "4px" }}>
-            {overview?.pending_per_professor ? Object.keys(overview.pending_per_professor).length : 0}
+            {Object.keys(profPendingMap).length}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "4px" }}>With active course offerings</div>
         </div>
@@ -301,27 +328,27 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
                       #{c.id}
                     </td>
                     <td style={{ padding: "12px" }}>
-                      <div style={{ fontWeight: 600, color: "var(--text-main)" }}>{c.student?.name || `Student #${c.student_id}`}</div>
+                      <div style={{ fontWeight: 600, color: "var(--text-main)" }}>{c.student_name}</div>
                       <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
-                        {c.student?.roll_number} • Sec {c.student?.section || "A"}
+                        {c.student_roll} • Sec {c.student_section || "A"}
                       </div>
                     </td>
                     <td style={{ padding: "12px" }}>
                       <div style={{ fontWeight: 600, color: "var(--text-main)" }}>
-                        {c.assessment?.course_code || "Course"} — {c.assessment?.course_title}
+                        {c.course_code} — {c.subject}
                       </div>
                       <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
-                        {c.assessment?.title} ({c.assessment?.assessment_type})
+                        {c.assessment_kind}
                       </div>
                     </td>
                     <td style={{ padding: "12px", color: "var(--text-muted)" }}>
-                      {c.event?.title || `Event #${c.event_id}`}
+                      {c.event_title}
                     </td>
                     <td style={{ padding: "12px" }}>
                       <StatusChip status={c.status} />
                     </td>
                     <td style={{ padding: "12px", maxWidth: "220px", color: "var(--color-danger)", fontSize: "0.75rem" }}>
-                      {c.reason || "Professor rejected request."}
+                      {c.rejection_reason || "Professor rejected request."}
                     </td>
                     <td style={{ padding: "12px", textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
@@ -411,10 +438,10 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
               >
                 <div>
                   <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-main)" }}>
-                    #{sc.id} — {sc.student?.name}
+                    #{sc.id} — {sc.student_name}
                   </div>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
-                    {sc.assessment?.course_code} • Last updated {new Date(sc.updated_at).toLocaleDateString()}
+                    {sc.course_code} • Last updated {new Date(sc.updated_at).toLocaleDateString()}
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -450,41 +477,44 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
           </h3>
         </div>
 
-        {overview?.pending_per_professor && Object.keys(overview.pending_per_professor).length > 0 ? (
+        {Object.keys(profPendingMap).length > 0 ? (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
-            {Object.entries(overview.pending_per_professor).map(([profName, count]) => (
-              <div
-                key={profName}
-                style={{
-                  background: "var(--surface-elevated)",
-                  border: "1px solid var(--surface-border)",
-                  borderRadius: "8px",
-                  padding: "12px 14px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "0.84rem", fontWeight: 600, color: "var(--text-main)" }}>{profName}</div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Course Instructor</div>
-                </div>
+            {Object.entries(profPendingMap).map(([profName, count]) => {
+              const pendingCount = Number(count) || 0;
+              return (
                 <div
-                  className="font-mono"
+                  key={profName}
                   style={{
-                    fontSize: "1.1rem",
-                    fontWeight: 700,
-                    color: count > 0 ? "var(--color-warning)" : "var(--color-success)",
-                    padding: "2px 8px",
-                    borderRadius: "4px",
-                    background: "var(--surface-card)",
+                    background: "var(--surface-elevated)",
                     border: "1px solid var(--surface-border)",
+                    borderRadius: "8px",
+                    padding: "12px 14px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                   }}
                 >
-                  {count} pending
+                  <div>
+                    <div style={{ fontSize: "0.84rem", fontWeight: 600, color: "var(--text-main)" }}>{profName}</div>
+                    <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Course Instructor</div>
+                  </div>
+                  <div
+                    className="font-mono"
+                    style={{
+                      fontSize: "1.1rem",
+                      fontWeight: 700,
+                      color: pendingCount > 0 ? "var(--color-warning)" : "var(--color-success)",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      background: "var(--surface-card)",
+                      border: "1px solid var(--surface-border)",
+                    }}
+                  >
+                    {pendingCount} pending
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>No faculty workload registered yet.</div>
@@ -546,13 +576,13 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
               }}
             >
               <div>
-                <strong>Student:</strong> {selectedCase.student?.name} ({selectedCase.student?.roll_number})
+                <strong>Student:</strong> {selectedCase.student_name} ({selectedCase.student_roll})
               </div>
               <div style={{ marginTop: "4px" }}>
-                <strong>Course:</strong> {selectedCase.assessment?.course_code} — {selectedCase.assessment?.title}
+                <strong>Course:</strong> {selectedCase.course_code} — {selectedCase.subject}
               </div>
               <div style={{ marginTop: "4px" }}>
-                <strong>Event:</strong> {selectedCase.event?.title}
+                <strong>Event:</strong> {selectedCase.event_title}
               </div>
               <div style={{ marginTop: "4px", color: "var(--color-danger)" }}>
                 <strong>Current Status:</strong> {selectedCase.status}
@@ -622,18 +652,14 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
               </div>
 
               {overrideDecision === "APPROVED" && (
-                <div>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-main)", display: "block", marginBottom: "6px" }}>
-                    Rescheduled Slot Assignment:
-                  </label>
-                  {selectedCase.suggested_slot ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {selectedCase.suggested_retake_info && (
                     <div
                       style={{
                         background: "var(--surface-elevated)",
                         border: "1px solid var(--surface-border)",
                         borderRadius: "6px",
                         padding: "8px 12px",
-                        marginBottom: "8px",
                         fontSize: "0.76rem",
                         color: "var(--text-main)",
                         display: "flex",
@@ -642,25 +668,54 @@ export const HODDashboard: React.FC<HODDashboardProps> = ({ token }) => {
                       }}
                     >
                       <Sparkles size={14} color="var(--color-primary)" />
-                      <span>Sister Slot: {selectedCase.suggested_slot.offering?.section} on {new Date(selectedCase.suggested_slot.start_time).toLocaleString()}</span>
+                      <span>Sister Section Parallel Slot: {selectedCase.suggested_retake_info}</span>
                     </div>
-                  ) : null}
+                  )}
 
-                  <input
-                    type="text"
-                    placeholder="Or enter custom slot (e.g. 2026-10-15T14:00:00Z in Hall B)"
-                    value={customSlot}
-                    onChange={(e) => setCustomSlot(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px 10px",
-                      background: "var(--surface-dark)",
-                      border: "1px solid var(--surface-border)",
-                      borderRadius: "6px",
-                      color: "var(--text-main)",
-                      fontSize: "0.78rem",
-                    }}
-                  />
+                  {/* Datetime Field */}
+                  <div>
+                    <label style={{ fontSize: "0.76rem", fontWeight: 600, color: "var(--text-main)", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                      <Calendar size={13} color="var(--text-dim)" />
+                      <span>Rescheduled Date & Time:</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={customDateTime}
+                      onChange={(e) => setCustomDateTime(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        background: "var(--surface-dark)",
+                        border: "1px solid var(--surface-border)",
+                        borderRadius: "6px",
+                        color: "var(--text-main)",
+                        fontSize: "0.78rem",
+                      }}
+                    />
+                  </div>
+
+                  {/* Venue Field */}
+                  <div>
+                    <label style={{ fontSize: "0.76rem", fontWeight: 600, color: "var(--text-main)", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                      <MapPin size={13} color="var(--text-dim)" />
+                      <span>Assigned Venue / Examination Hall:</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Turing Hall 2, Room 402"
+                      value={customVenue}
+                      onChange={(e) => setCustomVenue(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        background: "var(--surface-dark)",
+                        border: "1px solid var(--surface-border)",
+                        borderRadius: "6px",
+                        color: "var(--text-main)",
+                        fontSize: "0.78rem",
+                      }}
+                    />
+                  </div>
                 </div>
               )}
 
