@@ -3,3 +3,9 @@
 .venv/
 .venv
 *.log
+*.bak
+*.backup
+campus.db.bak
+backend/campus.db
+backend/campus.db.bak
+campus.db
