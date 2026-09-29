@@ -156,7 +156,9 @@ class EventResponse(BaseModel):
     created_by: int
     created_at: str
     participant_count: int = 0
+    participants_count: int = 0
     clash_count: int = 0
+    clashes_count: int = 0
 
 class AddParticipantsRequest(BaseModel):
     student_ids: List[int] = Field(..., min_length=1)
@@ -191,15 +193,19 @@ class ClashCaseResponse(BaseModel):
     student_id: int
     student_name: str
     student_roll: str
-    student_section: str
-    student_department: str
+    student_section: str = ""
+    student_department: str = ""
     assessment_id: int
     course_code: str
     subject: str
-    offering_section: str
+    offering_section: str = ""
     assessment_kind: str
-    assessment_start_at: str
-    assessment_end_at: str
+    assessment_start_at: str = ""
+    assessment_end_at: str = ""
+    assessment_start: Optional[str] = None
+    assessment_end: Optional[str] = None
+    faculty_id: Optional[int] = None
+    faculty_name: Optional[str] = None
     status: str
     suggested_retake_assessment_id: Optional[int] = None
     suggested_retake_info: Optional[str] = None
@@ -217,16 +223,29 @@ class ClashCaseResponse(BaseModel):
     is_stuck: bool = False
     timeline: List[CaseTimelineResponse] = Field(default_factory=list)
 
+class EventDetailResponse(EventResponse):
+    clashes: List["ClashCaseResponse"] = Field(default_factory=list)
+
+class ClashCaseDetailResponse(ClashCaseResponse):
+    pass
+
 class FileCasesRequest(BaseModel):
     case_ids: List[int] = Field(..., min_length=1)
 
+CaseFileBulkRequest = FileCasesRequest
+
 class DecisionRequest(BaseModel):
     case_ids: List[int] = Field(..., min_length=1)
-    decision: Literal["approve", "counter", "reject"]
+    decision: str
+    slot_id: Optional[int] = None
     retake_assessment_id: Optional[int] = None
+    custom_at: Optional[str] = None
     retake_at: Optional[str] = None
+    note: Optional[str] = None
     retake_note: Optional[str] = None
     rejection_reason: Optional[str] = None
+
+CaseDecisionBulkRequest = DecisionRequest
 
 class AcceptCounterRequest(BaseModel):
     note: Optional[str] = None
@@ -234,20 +253,29 @@ class AcceptCounterRequest(BaseModel):
 class SendBackRequest(BaseModel):
     note: str = Field(..., min_length=2)
 
+CounterActionRequest = SendBackRequest
+
 class OverrideRequest(BaseModel):
+    slot_id: Optional[int] = None
     retake_assessment_id: Optional[int] = None
+    custom_at: Optional[str] = None
     retake_at: Optional[str] = None
     note: str = Field(..., min_length=2)
+
+HODOverrideRequest = OverrideRequest
 
 class CompleteCaseRequest(BaseModel):
     note: Optional[str] = None
 
 class HODOverviewResponse(BaseModel):
-    total_cases: int
-    by_status: Dict[str, int]
-    escalated_cases: List[ClashCaseResponse]
-    stuck_cases: List[ClashCaseResponse]
-    pending_per_professor: Dict[str, int]
+    department: Optional[str] = None
+    total_cases: int = 0
+    by_status: Dict[str, int] = Field(default_factory=dict)
+    counts_by_status: Dict[str, int] = Field(default_factory=dict)
+    escalated_cases: List[ClashCaseResponse] = Field(default_factory=list)
+    stuck_cases: List[ClashCaseResponse] = Field(default_factory=list)
+    per_professor_pending: Dict[str, int] = Field(default_factory=dict)
+    pending_per_professor: Dict[str, int] = Field(default_factory=dict)
 
 class NotificationResponse(BaseModel):
     id: int

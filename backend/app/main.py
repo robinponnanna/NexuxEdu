@@ -10,6 +10,7 @@ from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.transit import router as transit_router, handle_transit_websocket
 from app.api.erp import router as erp_router
+from app.api.clash import router as clash_router
 from fastapi import WebSocket, Query
 from typing import Optional
 
@@ -45,6 +46,7 @@ app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(chat_router, prefix=settings.API_V1_STR)
 app.include_router(transit_router, prefix=settings.API_V1_STR)
 app.include_router(erp_router, prefix=settings.API_V1_STR)
+app.include_router(clash_router, prefix=settings.API_V1_STR)
 
 # Top-level WebSocket alias as specified in SYSTEM_DESIGN: /ws/transit/{bus_id}
 @app.websocket("/ws/transit/{bus_id}")

@@ -50,6 +50,8 @@ class Faculty(Base):
     designation: Mapped[str] = mapped_column(String(60), nullable=False)
     annual_salary: Mapped[float] = mapped_column(Float, nullable=False) # Sensitive RBAC field
 
+    user: Mapped["User"] = relationship("User")
+
 class Student(Base):
     __tablename__ = "students"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
@@ -60,6 +62,8 @@ class Student(Base):
     department: Mapped[str] = mapped_column(String(60), nullable=False)
     semester: Mapped[int] = mapped_column(Integer, nullable=False)
     section: Mapped[str] = mapped_column(String(10), default="Section A", nullable=False)
+
+    user: Mapped["User"] = relationship("User")
 
 class Attendance(Base):
     __tablename__ = "attendance"
