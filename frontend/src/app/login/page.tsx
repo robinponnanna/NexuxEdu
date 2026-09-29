@@ -59,6 +59,30 @@ export default function LoginPage() {
       icon: Shield,
       color: "var(--color-admin)",
     },
+    {
+      role: "faculty",
+      email: "prof.dave@campus.edu",
+      name: "Prof. Dave (HOD)",
+      title: "Head of Dept (CS)",
+      icon: School,
+      color: "var(--color-danger)",
+    },
+    {
+      role: "faculty",
+      email: "smith@campus.edu",
+      name: "Prof. Smith",
+      title: "Faculty (Cloud Computing)",
+      icon: School,
+      color: "var(--color-faculty)",
+    },
+    {
+      role: "faculty",
+      email: "turing@campus.edu",
+      name: "Prof. Turing",
+      title: "Faculty (Adv Compilers)",
+      icon: School,
+      color: "var(--color-faculty)",
+    },
   ];
 
   const handleLogin = async (e?: React.FormEvent, directEmail?: string) => {

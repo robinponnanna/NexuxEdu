@@ -30,19 +30,23 @@ RAG_CHATBOT_DIR = PROJECT_ROOT / "erp_rag_chatbot"
 if str(RAG_CHATBOT_DIR) not in sys.path:
     sys.path.insert(0, str(RAG_CHATBOT_DIR))
 
-from rag_pipeline import ERPRAGChatbot
-from utils.rbac_filters import User as RAGUser
+try:
+    from rag_pipeline import ERPRAGChatbot
+    from utils.rbac_filters import User as RAGUser
+except ImportError:
+    ERPRAGChatbot = None
+    RAGUser = None
 
 router = APIRouter(prefix="/chat", tags=["Conversational AI"])
 
 # Persistent singleton instance of the RAG engine
-_rag_chatbot_instance: Optional[ERPRAGChatbot] = None
+_rag_chatbot_instance = None
 
 
-def get_rag_chatbot() -> ERPRAGChatbot:
+def get_rag_chatbot():
     """Returns a singleton instance of the production ERPRAGChatbot."""
     global _rag_chatbot_instance
-    if _rag_chatbot_instance is None:
+    if _rag_chatbot_instance is None and ERPRAGChatbot is not None:
         chroma_dir = str(RAG_CHATBOT_DIR / "database" / "chroma_db")
         _rag_chatbot_instance = ERPRAGChatbot(persist_dir=chroma_dir)
     return _rag_chatbot_instance
@@ -174,6 +178,12 @@ async def query_chat(
 
     # 5. Execute End-to-End RAG Pipeline (ChromaDB Vector Retrieval + llama3.2:3b Synthesis)
     chatbot = get_rag_chatbot()
+    if chatbot is None or RAGUser is None:
+        return ChatResponse(
+            reply="The conversational RAG assistant requires the optional vector store package (langchain_chroma). All ERP, fleet transit, and clash rescheduling features are fully functional.",
+            sources=[],
+            access_denied=False,
+        )
     rag_result = chatbot.query(rag_user, query_text, extra_docs=extra_docs)
 
     reply_text = rag_result.get("answer", "Access to this information is forbidden.")
