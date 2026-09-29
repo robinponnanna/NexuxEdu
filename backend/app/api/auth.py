@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
 from app.core.database import AsyncSessionLocal, User, Student, Faculty, Parent
 from app.core.security import verify_password, create_access_token, decode_access_token
+from app.core.department import normalize_department, is_hod_designation
 from app.models.schemas import LoginRequest, TokenResponse, UserResponse, UserSecurityClaims
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -40,6 +41,8 @@ async def login(req: LoginRequest):
         student_id = None
         ward_id = None
         bus_id = None
+        faculty_id = None
+        is_hod = False
         
         # Load role-specific profile bindings
         if user.role == "student":
@@ -48,14 +51,16 @@ async def login(req: LoginRequest):
             st = s_res.scalar_one_or_none()
             if st:
                 student_id = st.id
-                department = st.department
+                department = normalize_department(st.department)
                 bus_id = st.bus_id
         elif user.role == "faculty":
             f_stmt = select(Faculty).where(Faculty.user_id == user.id)
             f_res = await session.execute(f_stmt)
             fac = f_res.scalar_one_or_none()
             if fac:
-                department = fac.department
+                department = normalize_department(fac.department)
+                faculty_id = fac.id
+                is_hod = is_hod_designation(fac.designation)
         elif user.role == "parent":
             p_stmt = select(Parent).where(Parent.user_id == user.id)
             p_res = await session.execute(p_stmt)
@@ -67,7 +72,7 @@ async def login(req: LoginRequest):
                 ward = w_res.scalar_one_or_none()
                 if ward:
                     ward_id = ward.id
-                    department = ward.department
+                    department = normalize_department(ward.department)
                     bus_id = ward.bus_id
                     
         claims_dict = {
@@ -79,7 +84,9 @@ async def login(req: LoginRequest):
             "department": department,
             "student_id": student_id,
             "ward_id": ward_id,
-            "bus_id": bus_id
+            "bus_id": bus_id,
+            "faculty_id": faculty_id,
+            "is_hod": is_hod,
         }
         
         token = create_access_token(claims_dict)
@@ -95,7 +102,9 @@ async def login(req: LoginRequest):
                 department=department,
                 student_id=student_id,
                 ward_id=ward_id,
-                bus_id=bus_id
+                bus_id=bus_id,
+                faculty_id=faculty_id,
+                is_hod=is_hod,
             )
         )
 
@@ -110,5 +119,7 @@ async def get_me(claims: UserSecurityClaims = Depends(get_current_user_claims)):
         department=claims.department,
         student_id=claims.student_id,
         ward_id=claims.ward_id,
-        bus_id=claims.bus_id
+        bus_id=claims.bus_id,
+        faculty_id=claims.faculty_id,
+        is_hod=claims.is_hod,
     )
