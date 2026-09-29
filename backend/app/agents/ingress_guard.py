@@ -21,5 +21,5 @@ def check_input_guardrail(query: str, claims: UserSecurityClaims) -> Tuple[bool,
     lower_query = query.lower()
     for pattern in JAILBREAK_PATTERNS:
         if re.search(pattern, lower_query, re.IGNORECASE):
-            return False, f"Request rejected by security guardrail: Detected potentially adversarial query pattern matching policy violations."
+            return False, "Access to this information is forbidden."
     return True, ""

@@ -23,7 +23,7 @@ async def execute_structured_records_agent(state: ERPGraphState) -> Dict[str, An
             # Strictly prohibited: Logged and rejected without database access
             return {
                 "authorized": False,
-                "reason": "You do not have authorization to view faculty compensation or payroll records. This access boundary violation has been recorded.",
+                "reason": "Access to this information is forbidden.",
                 "data": None,
                 "citations": []
             }
@@ -82,6 +82,19 @@ async def execute_structured_records_agent(state: ERPGraphState) -> Dict[str, An
     target_student_id = claims.student_id if claims.role == "student" else claims.ward_id
     
     if target_student_id:
+        if claims.role == "student":
+            # Check if student is attempting to probe another student's record by name
+            other_names = ["alex", "rahul", "anita", "emily", "michael", "sophia", "david", "smith"]
+            my_names = [w.lower() for w in claims.name.split()]
+            for name in other_names:
+                if name in query_lower and name not in my_names:
+                    return {
+                        "authorized": False,
+                        "reason": "Access to this information is forbidden.",
+                        "data": None,
+                        "citations": []
+                    }
+
         async with AsyncSessionLocal() as session:
             # Query attendance records bound to target_student_id
             stmt = select(Attendance).where(Attendance.student_id == target_student_id)

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { sendChatMessage, login, ChatResponse, Citation } from "@/lib/api";
-import { MessageSquare, X, Send, Bot, User, Lock, Sparkles, BookOpen, Database, Navigation } from "lucide-react";
+import { MessageSquare, X, Send, Bot, User, Lock, Sparkles, BookOpen, Database, Navigation, Maximize2, Minimize2 } from "lucide-react";
 
 
 interface ChatMessage {
@@ -27,13 +27,64 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ token, userRole, isOpen,
     {
       id: "welcome",
       sender: "assistant",
-      content: `👋 Hello! I am the **OmniCampus RBAC Assistant**. I can query your verified academic records, check real-time school bus coordinates, or cite university regulations. My retrieval boundary is strictly locked to your **${userRole.toUpperCase()}** permissions.`,
+      content: `👋 Hello! I am the **NexusEdu RBAC Assistant**. I can query your verified academic records, check real-time school bus coordinates, or cite university regulations. My retrieval boundary is strictly locked to your **${userRole.toUpperCase()}** permissions.`,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Resizable state
+  const [dimensions, setDimensions] = useState({ width: 440, height: 600 });
+  const [isMaximized, setIsMaximized] = useState(false);
+  const isResizingRef = useRef<null | "left" | "top" | "top-left">(null);
+  const startPosRef = useRef({ x: 0, y: 0, width: 440, height: 600 });
+
+  const handleMouseDownResize = (direction: "left" | "top" | "top-left", e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isMaximized) setIsMaximized(false);
+    isResizingRef.current = direction;
+    startPosRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      width: dimensions.width,
+      height: dimensions.height,
+    };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const dx = startPosRef.current.x - e.clientX; // Dragging left increases width
+      const dy = startPosRef.current.y - e.clientY; // Dragging up increases height
+
+      setDimensions((prev) => {
+        let newWidth = prev.width;
+        let newHeight = prev.height;
+
+        if (isResizingRef.current === "left" || isResizingRef.current === "top-left") {
+          newWidth = Math.max(340, Math.min(window.innerWidth - 32, startPosRef.current.width + dx));
+        }
+        if (isResizingRef.current === "top" || isResizingRef.current === "top-left") {
+          newHeight = Math.max(420, Math.min(window.innerHeight - 32, startPosRef.current.height + dy));
+        }
+
+        return { width: newWidth, height: newHeight };
+      });
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = null;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
 
   // Auto-scroll on new message
   useEffect(() => {
@@ -59,22 +110,39 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ token, userRole, isOpen,
 
     try {
       let activeToken = token;
+      const emailMap: Record<string, string> = {
+        student: "student@campus.edu",
+        faculty: "faculty@campus.edu",
+        parent: "parent@campus.edu",
+        admin: "admin@campus.edu",
+      };
+
       if (!activeToken) {
-        const emailMap: Record<string, string> = {
-          student: "student@campus.edu",
-          faculty: "faculty@campus.edu",
-          parent: "parent@campus.edu",
-          admin: "admin@campus.edu",
-        };
         try {
           const authRes = await login(emailMap[userRole] || "student@campus.edu");
           activeToken = authRes.token;
         } catch {
-          // Continue with empty token
+          // Continue
         }
       }
 
-      const response: ChatResponse = await sendChatMessage(activeToken, textToSend);
+      let response: ChatResponse;
+      try {
+        response = await sendChatMessage(activeToken, textToSend);
+      } catch (firstErr: any) {
+        console.warn("[NexusEdu Chat] Initial attempt failed, refreshing session...", firstErr);
+        try {
+          const reAuth = await login(emailMap[userRole] || "student@campus.edu");
+          activeToken = reAuth.token;
+          if (typeof window !== "undefined") {
+            localStorage.setItem("omnicampus_session", JSON.stringify(reAuth));
+            localStorage.setItem("nexusedu_session", JSON.stringify(reAuth));
+          }
+          response = await sendChatMessage(activeToken, textToSend);
+        } catch (retryErr: any) {
+          throw new Error(retryErr?.message || firstErr?.message || "Failed to reach AI service.");
+        }
+      }
 
       const assistantMsg: ChatMessage = {
         id: String(Date.now() + 1),
@@ -164,12 +232,12 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ token, userRole, isOpen,
         <div
           style={{
             position: "fixed",
-            bottom: "24px",
-            right: "24px",
-            width: "410px",
-            height: "580px",
-            maxHeight: "calc(100vh - 48px)",
-            maxWidth: "calc(100vw - 48px)",
+            bottom: isMaximized ? "16px" : "24px",
+            right: isMaximized ? "16px" : "24px",
+            width: isMaximized ? "calc(100vw - 32px)" : `${dimensions.width}px`,
+            height: isMaximized ? "calc(100vh - 32px)" : `${dimensions.height}px`,
+            maxHeight: "calc(100vh - 24px)",
+            maxWidth: "calc(100vw - 24px)",
             borderRadius: "14px",
             display: "flex",
             flexDirection: "column",
@@ -178,8 +246,76 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ token, userRole, isOpen,
             zIndex: 10000,
             overflow: "hidden",
             background: "var(--surface-card)",
+            userSelect: isResizingRef.current ? "none" : "auto",
+            transition: isResizingRef.current ? "none" : "width 0.2s cubic-bezier(0.16, 1, 0.3, 1), height 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
         >
+          {/* Top-Left Corner Resize Handle */}
+          {!isMaximized && (
+            <div
+              onMouseDown={(e) => handleMouseDownResize("top-left", e)}
+              title="Drag to resize window"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "18px",
+                height: "18px",
+                cursor: "nwse-resize",
+                zIndex: 10002,
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "flex-start",
+                padding: "3px",
+              }}
+            >
+              <div
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderTop: "2px solid var(--color-primary)",
+                  borderLeft: "2px solid var(--color-primary)",
+                  borderRadius: "2px 0 0 0",
+                  opacity: 0.8,
+                }}
+              />
+            </div>
+          )}
+
+          {/* Top Edge Resize Handle */}
+          {!isMaximized && (
+            <div
+              onMouseDown={(e) => handleMouseDownResize("top", e)}
+              title="Drag to resize vertically"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: "18px",
+                right: "18px",
+                height: "6px",
+                cursor: "ns-resize",
+                zIndex: 10001,
+              }}
+            />
+          )}
+
+          {/* Left Edge Resize Handle */}
+          {!isMaximized && (
+            <div
+              onMouseDown={(e) => handleMouseDownResize("left", e)}
+              title="Drag to resize horizontally"
+              style={{
+                position: "absolute",
+                top: "18px",
+                bottom: "18px",
+                left: 0,
+                width: "6px",
+                cursor: "ew-resize",
+                zIndex: 10001,
+              }}
+            />
+          )}
+
           {/* Header */}
           <div
             style={{
@@ -209,7 +345,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ token, userRole, isOpen,
               </div>
               <div>
                 <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--text-main)" }}>
-                  OmniCampus AI
+                  NexusEdu AI
                 </div>
                 <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "4px" }}>
                   <Sparkles size={10} color="var(--color-primary)" />
@@ -218,20 +354,49 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ token, userRole, isOpen,
               </div>
             </div>
 
-            <button
-              onClick={onToggle}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "var(--text-dim)",
-                cursor: "pointer",
-                padding: "4px",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-main)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-dim)")}
-            >
-              <X size={18} />
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {/* Maximize / Restore Button */}
+              <button
+                onClick={() => setIsMaximized((prev) => !prev)}
+                title={isMaximized ? "Restore window size" : "Maximize window"}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-dim)",
+                  cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "4px",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-main)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-dim)")}
+              >
+                {isMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              </button>
+
+              {/* Close Button */}
+              <button
+                onClick={onToggle}
+                title="Close chat"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-dim)",
+                  cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "4px",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-main)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-dim)")}
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           {/* Messages Work Area */}

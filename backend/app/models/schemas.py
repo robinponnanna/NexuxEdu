@@ -5,10 +5,10 @@ from pydantic import BaseModel, Field
 
 class UserSecurityClaims(BaseModel):
     user_id: int
-    public_id: str
+    public_id: Optional[str] = "USR-000"
     role: Literal["student", "faculty", "parent", "admin"]
     email: str
-    name: str
+    name: Optional[str] = "Campus Member"
     department: Optional[str] = None
     student_id: Optional[int] = None
     ward_id: Optional[int] = None
@@ -48,7 +48,8 @@ class Citation(BaseModel):
     detail: Optional[str] = None
 
 class ChatRequest(BaseModel):
-    message: str
+    message: Optional[str] = None
+    query: Optional[str] = None
     conversation_history: List[AgentMessage] = Field(default_factory=list)
 
 class ChatResponse(BaseModel):
