@@ -381,7 +381,7 @@ export default function HomePage() {
   // Check login session on mount to automatically determine role & rights
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedSession = localStorage.getItem("omnicampus_session");
+      const savedSession = localStorage.getItem("nexusedu_session") || localStorage.getItem("omnicampus_session");
       if (savedSession) {
         try {
           const session = JSON.parse(savedSession);
@@ -413,6 +413,7 @@ export default function HomePage() {
       setToken(session.token);
       setUser(session.user);
       if (typeof window !== "undefined") {
+        localStorage.setItem("nexusedu_session", JSON.stringify(session));
         localStorage.setItem("omnicampus_session", JSON.stringify(session));
       }
       if (session.user.bus_id) {
@@ -482,7 +483,7 @@ export default function HomePage() {
           <ShieldCheck size={24} />
         </div>
         <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-main)" }}>
-          Verifying OmniCampus Security Claims...
+          Verifying NexusEdu Security Claims...
         </div>
         <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
           Applying zero-trust role bounds & RBAC permissions
@@ -544,7 +545,7 @@ export default function HomePage() {
                 </span>
               </div>
               <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text-main)", letterSpacing: "-0.02em" }}>
-                Welcome, {user?.name || "OmniCampus User"}
+                Welcome, {user?.name || "NexusEdu User"}
               </h1>
               <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
                 {user?.role === "student" && "Track course attendance, exam eligibility thresholds, and your assigned transit shuttle."}

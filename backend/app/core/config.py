@@ -3,12 +3,12 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "OmniCampus ERP & SafeTransit"
+    PROJECT_NAME: str = "NexusEdu ERP & SafeTransit"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
     # Security
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "omnicampus-super-secret-jwt-key-2026-secure-hackathon")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "nexusedu-super-secret-jwt-key-2026-secure-hackathon")
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 # 24 hours
     

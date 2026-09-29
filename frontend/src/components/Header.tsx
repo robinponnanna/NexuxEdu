@@ -114,7 +114,7 @@ export const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
             <ShieldCheck size={20} />
           </div>
           <span style={{ color: "var(--text-main)", fontWeight: 700 }}>
-            OmniCampus <span style={{ color: "var(--color-primary)", fontWeight: 600 }}>ERP</span>
+            NexusEdu <span style={{ color: "var(--color-primary)", fontWeight: 600 }}>ERP</span>
           </span>
         </div>
       </div>

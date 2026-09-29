@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "OmniCampus ERP & SafeTransit",
+  title: "NexusEdu ERP & SafeTransit",
   description: "Next-Gen Smart Campus ERP with RBAC-Grounded AI & Live Transit Telemetry",
 };
 
