@@ -13,6 +13,7 @@ import {
   CheckCircle,
   ArrowLeft,
   Loader2,
+  Video,
 } from "lucide-react";
 import {
   ModuleLearningMaterialResponse,
@@ -21,10 +22,12 @@ import {
   AcademicExplainResponse,
   explainAcademicConcept,
 } from "@/lib/api";
+import { ensureVideoGenerationSafely } from "@/lib/videoRequestCoordinator";
 
 interface MaterialReaderProps {
   materialData: ModuleLearningMaterialResponse;
   token: string;
+  isWeakModule?: boolean;
   onBack: () => void;
   onOpenMicroLesson: (response: AcademicExplainResponse) => void;
 }
@@ -32,6 +35,7 @@ interface MaterialReaderProps {
 export const MaterialReader: React.FC<MaterialReaderProps> = ({
   materialData,
   token,
+  isWeakModule = false,
   onBack,
   onOpenMicroLesson,
 }) => {
@@ -50,6 +54,26 @@ export const MaterialReader: React.FC<MaterialReaderProps> = ({
   const activePage: MaterialPageDetail | undefined = pages[currentPageIndex];
 
   const contentContainerRef = useRef<HTMLDivElement>(null);
+
+  // Automatic video pre-generation ONLY for weak-area / Needs Support module
+  useEffect(() => {
+    if (!isWeakModule || !token || !materialData) return;
+
+    const firstLesson = materialData.micro_lessons?.[0];
+    const topicName = firstLesson?.topic || firstLesson?.title || materialData.module_title;
+
+    ensureVideoGenerationSafely(token, {
+      lesson_id: firstLesson?.id,
+      topic_key: firstLesson?.topic_key,
+      subject_id: materialData.subject_id,
+      module_id: materialData.module_id,
+      co_code: materialData.co_code,
+      topic: topicName,
+      lesson_payload: firstLesson,
+    }).catch((err) => {
+      console.warn("[MaterialReader] Background weak-area video trigger notice:", err.message);
+    });
+  }, [isWeakModule, token, materialData]);
 
   // Parse structured topic names if available
   const topics: string[] = React.useMemo(() => {
@@ -101,7 +125,6 @@ export const MaterialReader: React.FC<MaterialReaderProps> = ({
   // Set up and clean up selection event listeners
   useEffect(() => {
     const handleMouseUp = () => {
-      // Small timeout to allow selection range calculation
       setTimeout(handleSelectionChange, 20);
     };
 
@@ -155,7 +178,6 @@ export const MaterialReader: React.FC<MaterialReaderProps> = ({
         topic: topics[0] || activePage?.page_title,
       });
 
-      // Launch micro-lesson player with response
       onOpenMicroLesson(response);
     } catch (err: any) {
       console.error("Failed to generate explanation:", err);
@@ -226,6 +248,22 @@ export const MaterialReader: React.FC<MaterialReaderProps> = ({
               <span style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>
                 Module {materialData.module_number}: {materialData.module_title}
               </span>
+              {isWeakModule && (
+                <span
+                  style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    background: "#FEF2F2",
+                    color: "var(--color-danger)",
+                    border: "1px solid #FECACA",
+                  }}
+                >
+                  Needs Support Area
+                </span>
+              )}
             </div>
             <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-main)", marginTop: "3px" }}>
               {activeMaterial?.title || "Course Learning Material"}
@@ -233,8 +271,44 @@ export const MaterialReader: React.FC<MaterialReaderProps> = ({
           </div>
         </div>
 
-        {/* Source Reference & Pre-cached Micro-Lessons count */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {/* Source Reference & Direct Micro-Lessons Launcher */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {materialData.micro_lessons && materialData.micro_lessons.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const ml = materialData.micro_lessons[0];
+                onOpenMicroLesson({
+                  status: "success",
+                  lesson: ml,
+                  generation: {
+                    mode: "cache",
+                    model: "grounded-microlesson-store",
+                    cached: true,
+                    latency_ms: 10,
+                  },
+                });
+              }}
+              style={{
+                background: "var(--color-primary)",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "8px",
+                padding: "8px 14px",
+                fontSize: "0.80rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                boxShadow: "var(--shadow-sm)",
+              }}
+            >
+              <Sparkles size={14} color="#FDE047" />
+              <span>Launch Micro-Lesson</span>
+            </button>
+          )}
+
           {activeMaterial?.source_reference && (
             <div
               style={{

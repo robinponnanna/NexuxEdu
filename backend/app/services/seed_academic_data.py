@@ -1063,7 +1063,17 @@ async def seed_academic_support_data(force_reseed: bool = False):
                         },
                         "key_takeaway": "Page size = 2^(offset bits). For 4 KB pages, offset is always 12 bits."
                     }
-                ]
+                ],
+                "video_path": "lessons/cs301_co3_os_memory_paging_tlb.mp4",
+                "video_status": "ready",
+                "youtube_resource": {
+                    "video_id": "p3q5BIzRsmU",
+                    "title": "Lecture 17: Virtual Memory & Page Translation",
+                    "channel": "MIT OpenCourseWare",
+                    "start_seconds": 120,
+                    "end_seconds": 480,
+                    "description": "Comprehensive visual walkthrough of page table lookup mechanics, multi-level hierarchy, and TLB caching acceleration."
+                }
             },
             {
                 "subject_code": "CS301",
@@ -1123,7 +1133,17 @@ async def seed_academic_support_data(force_reseed: bool = False):
                         },
                         "key_takeaway": "FIFO suffers from Belady's Anomaly; LRU is a stack algorithm and never experiences it."
                     }
-                ]
+                ],
+                "video_path": "lessons/cs301_co3_os_virtual_memory_page_replacement.mp4",
+                "video_status": "ready",
+                "youtube_resource": {
+                    "video_id": "dYBLfgV1f6c",
+                    "title": "Page Replacement Algorithms: FIFO, LRU, Optimal",
+                    "channel": "Gate Smashers",
+                    "start_seconds": 30,
+                    "end_seconds": 420,
+                    "description": "Step-by-step trace of frame allocation, LRU stack implementation, and mathematical proof of Belady's anomaly."
+                }
             },
             {
                 "subject_code": "CS302",
@@ -1180,7 +1200,17 @@ async def seed_academic_support_data(force_reseed: bool = False):
                         },
                         "key_takeaway": "Lossless join is guaranteed when the shared attributes form a superkey of at least one sub-relation."
                     }
-                ]
+                ],
+                "video_path": "lessons/cs302_co3_dbms_normalization_bcnf.mp4",
+                "video_status": "ready",
+                "youtube_resource": {
+                    "video_id": "UrYLYV7WSHM",
+                    "title": "Boyce-Codd Normal Form (BCNF) Decomposition",
+                    "channel": "NPTEL IIT Kharagpur",
+                    "start_seconds": 45,
+                    "end_seconds": 390,
+                    "description": "Determining candidate keys, identifying non-trivial functional dependencies, and lossless BCNF decomposition."
+                }
             },
             {
                 "subject_code": "CS304",
@@ -1238,7 +1268,17 @@ async def seed_academic_support_data(force_reseed: bool = False):
                         },
                         "key_takeaway": "LR imbalance requires a Left-Rotate on child followed by a Right-Rotate on parent."
                     }
-                ]
+                ],
+                "video_path": "lessons/cs304_co3_algo_avl_rotations.mp4",
+                "video_status": "ready",
+                "youtube_resource": {
+                    "video_id": "jDM6_TnYIqE",
+                    "title": "AVL Tree - Insertion and Rotations (LL, RR, LR, RL)",
+                    "channel": "Abdul Bari",
+                    "start_seconds": 60,
+                    "end_seconds": 540,
+                    "description": "Visual intuition behind balance factors, single line rotations, and double zigzag rotations in self-balancing trees."
+                }
             },
             {
                 "subject_code": "CS303",
@@ -1279,7 +1319,17 @@ async def seed_academic_support_data(force_reseed: bool = False):
                         },
                         "key_takeaway": "Dijkstra locks minimum tentative distance node and relaxes neighbor edges until all nodes are visited."
                     }
-                ]
+                ],
+                "video_path": "lessons/cs303_co3_net_dijkstra_routing.mp4",
+                "video_status": "ready",
+                "youtube_resource": {
+                    "video_id": "XB4MIexjvY0",
+                    "title": "Dijkstra's Shortest Path Algorithm - Graph Theory",
+                    "channel": "Computerphile",
+                    "start_seconds": 15,
+                    "end_seconds": 360,
+                    "description": "How link-state routing protocols compute optimal forwarding paths using priority queues and greedy relaxation."
+                }
             }
         ]
 
@@ -1289,6 +1339,7 @@ async def seed_academic_support_data(force_reseed: bool = False):
             mod = subject_entities[s_code]["modules"].get(ml_data["co_code"])
 
             total_scenes_duration = sum(s.get("duration_seconds", 0) for s in ml_data["scenes"])
+            yt_res = ml_data.get("youtube_resource")
             lesson = MicroLesson(
                 subject_id=subj.id,
                 module_id=mod.id if mod else None,
@@ -1296,7 +1347,11 @@ async def seed_academic_support_data(force_reseed: bool = False):
                 topic_key=ml_data["topic_key"],
                 title=ml_data["title"],
                 duration_seconds=total_scenes_duration or ml_data.get("duration", 180),
-                scenes_json=json.dumps(ml_data["scenes"])
+                scenes_json=json.dumps(ml_data["scenes"]),
+                video_path=ml_data.get("video_path"),
+                video_status=ml_data.get("video_status", "none"),
+                video_duration=total_scenes_duration or ml_data.get("duration", 180),
+                youtube_resource_json=json.dumps(yt_res) if yt_res else None
             )
             session.add(lesson)
 

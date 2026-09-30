@@ -33,6 +33,7 @@ export const AcademicSupportContainer: React.FC<AcademicSupportContainerProps> =
 
   // Material Reader State
   const [materialData, setMaterialData] = useState<ModuleLearningMaterialResponse | null>(null);
+  const [isCurrentModuleWeak, setIsCurrentModuleWeak] = useState<boolean>(false);
   const [isLoadingMaterial, setIsLoadingMaterial] = useState<boolean>(false);
   const [materialError, setMaterialError] = useState<string | null>(null);
 
@@ -60,10 +61,21 @@ export const AcademicSupportContainer: React.FC<AcademicSupportContainerProps> =
   };
 
   // 2. Open Material Reader for a specific module
-  const handleStudyModule = async (moduleId: number) => {
+  const handleStudyModule = async (moduleId: number, isWeak?: boolean) => {
     if (isLoadingMaterial) return;
     setIsLoadingMaterial(true);
     setMaterialError(null);
+
+    let calculatedIsWeak = isWeak;
+    if (calculatedIsWeak === undefined && subjectDetail) {
+      if (subjectDetail.weakest_module?.id === moduleId) {
+        calculatedIsWeak = true;
+      } else {
+        const mod = subjectDetail.modules.find((m) => m.id === moduleId);
+        calculatedIsWeak = mod?.status === "Needs Support";
+      }
+    }
+    setIsCurrentModuleWeak(Boolean(calculatedIsWeak));
 
     try {
       const mat = await getModuleLearningMaterials(token, moduleId);
@@ -171,6 +183,7 @@ export const AcademicSupportContainer: React.FC<AcademicSupportContainerProps> =
         <MaterialReader
           materialData={materialData}
           token={token}
+          isWeakModule={isCurrentModuleWeak}
           onBack={handleBackToSubject}
           onOpenMicroLesson={handleOpenMicroLesson}
         />
@@ -181,6 +194,7 @@ export const AcademicSupportContainer: React.FC<AcademicSupportContainerProps> =
         <MicroLessonPlayer
           lesson={activeLessonResponse.lesson}
           generation={activeLessonResponse.generation}
+          token={token}
           isOpen={isLessonPlayerOpen}
           onClose={() => setIsLessonPlayerOpen(false)}
           onAskFollowup={handleAskFollowup}

@@ -32,3 +32,10 @@ frontend/build/
 # Operating System Files
 .DS_Store
 Thumbs.db
+
+# Video Rendering & Media Artifacts
+backend/media/audio/
+backend/media/temp/
+video/node_modules/
+video/out/
+video/.cache/

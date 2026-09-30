@@ -296,14 +296,26 @@ class LearningMaterialResponse(BaseModel):
     total_pages: int
     pages: List[MaterialPageResponse] = Field(default_factory=list)
 
+class YouTubeResource(BaseModel):
+    video_id: Optional[str] = None
+    title: str
+    channel: Optional[str] = "YouTube Academic"
+    start_seconds: Optional[int] = 0
+    end_seconds: Optional[int] = None
+    description: Optional[str] = None
+    search_url: Optional[str] = None
+    search_query: Optional[str] = None
+    is_embeddable: bool = True
+
 class MicroLessonSceneResponse(BaseModel):
     scene_id: int
     title: str
     duration_seconds: int
-    narration: str
-    visual_type: Literal["diagram", "flowchart", "code", "table", "step_by_step"]
+    narration: Optional[str] = None
+    visual_type: Optional[str] = "diagram"
     visual_data: Dict[str, Any] = Field(default_factory=dict)
-    key_takeaway: str
+    key_takeaway: Optional[str] = None
+    body: Optional[str] = None
 
 class MicroLessonResponse(BaseModel):
     id: int
@@ -316,6 +328,9 @@ class MicroLessonResponse(BaseModel):
     title: str
     duration_seconds: int
     scenes: List[Dict[str, Any]] = Field(default_factory=list)
+    video_url: Optional[str] = None
+    video_status: Optional[str] = "none" # "ready", "rendering", "queued", "none"
+    youtube_resource: Optional[YouTubeResource] = None
 
 class ModuleLearningMaterialResponse(BaseModel):
     module_id: int
@@ -371,20 +386,50 @@ class GenerationMetadata(BaseModel):
 
 class MicroLessonPayload(BaseModel):
     id: Optional[int] = None
+    subject_id: Optional[int] = None
+    subject_code: Optional[str] = None
+    subject_name: Optional[str] = None
+    module_id: Optional[int] = None
+    co_code: Optional[str] = None
+    topic_key: Optional[str] = None
     title: str
     topic: str
-    topic_key: Optional[str] = None
     difficulty: str = "Intermediate"
     duration_seconds: int = 45
     objective: str
     scenes: List[Dict[str, Any]] = Field(default_factory=list)
     sources: List[AcademicSourceCitation] = Field(default_factory=list)
+    video_url: Optional[str] = None
+    video_status: Optional[str] = "none" # "ready", "rendering", "queued", "none"
+    youtube_resource: Optional[YouTubeResource] = None
 
 class AcademicExplainResponse(BaseModel):
     status: Literal["success", "insufficient_context", "error"]
     lesson: MicroLessonPayload
     source_context: Dict[str, Any] = Field(default_factory=dict)
     generation: GenerationMetadata
+
+# --- Video Generation & Job Schemas ---
+
+class VideoGenerationRequest(BaseModel):
+    lesson_id: Optional[int] = None
+    topic_key: Optional[str] = None
+    subject_id: Optional[int] = None
+    module_id: Optional[int] = None
+    topic: Optional[str] = None
+    co_code: Optional[str] = None
+    lesson_payload: Optional[Dict[str, Any]] = None
+
+class VideoJobResponse(BaseModel):
+    job_id: str
+    lesson_id: Optional[int] = None
+    topic_key: str
+    status: Literal["queued", "rendering", "audio_generating", "video_rendering", "completed", "failed", "ready"]
+    progress_pct: Optional[int] = 0
+    video_url: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    error_message: Optional[str] = None
+    retryable: bool = True
 
 
 
