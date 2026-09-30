@@ -22,10 +22,12 @@ async def list_buses(claims: UserSecurityClaims = Depends(get_current_user_claim
         results = []
         for b in buses:
             # Check latest telemetry from cache
+            from app.services.transit_simulator import transit_simulator
+            is_driver_active = transit_simulator.is_driver_active(b.id)
             telemetry = await broker.get_bus_telemetry(b.id)
-            lat = telemetry.get("lat", b.current_lat) if telemetry else b.current_lat
-            lng = telemetry.get("lng", b.current_lng) if telemetry else b.current_lng
-            spd = telemetry.get("speed_kmh", b.speed_kmh) if telemetry else b.speed_kmh
+            lat = telemetry.get("lat", b.current_lat) if (telemetry and is_driver_active) else (b.current_lat if is_driver_active else None)
+            lng = telemetry.get("lng", b.current_lng) if (telemetry and is_driver_active) else (b.current_lng if is_driver_active else None)
+            spd = telemetry.get("speed_kmh", b.speed_kmh) if (telemetry and is_driver_active) else 0.0
             st = telemetry.get("status", b.status) if telemetry else b.status
             
             stops = json.loads(b.stops_json) if b.stops_json else []
@@ -41,6 +43,7 @@ async def list_buses(claims: UserSecurityClaims = Depends(get_current_user_claim
                 current_lng=lng,
                 speed_kmh=spd,
                 status=st,
+                driver_connected=is_driver_active,
                 last_updated=b.last_updated.isoformat() if b.last_updated else None,
                 stops=[BusStop(**s) for s in stops],
                 waypoints=waypoints
@@ -64,10 +67,12 @@ async def get_bus(bus_id: int, claims: UserSecurityClaims = Depends(get_current_
         if not b:
             raise HTTPException(status_code=404, detail="Bus route not found.")
             
+        from app.services.transit_simulator import transit_simulator
+        is_driver_active = transit_simulator.is_driver_active(b.id)
         telemetry = await broker.get_bus_telemetry(b.id)
-        lat = telemetry.get("lat", b.current_lat) if telemetry else b.current_lat
-        lng = telemetry.get("lng", b.current_lng) if telemetry else b.current_lng
-        spd = telemetry.get("speed_kmh", b.speed_kmh) if telemetry else b.speed_kmh
+        lat = telemetry.get("lat", b.current_lat) if (telemetry and is_driver_active) else (b.current_lat if is_driver_active else None)
+        lng = telemetry.get("lng", b.current_lng) if (telemetry and is_driver_active) else (b.current_lng if is_driver_active else None)
+        spd = telemetry.get("speed_kmh", b.speed_kmh) if (telemetry and is_driver_active) else 0.0
         st = telemetry.get("status", b.status) if telemetry else b.status
 
         stops = json.loads(b.stops_json) if b.stops_json else []
@@ -83,6 +88,7 @@ async def get_bus(bus_id: int, claims: UserSecurityClaims = Depends(get_current_
             current_lng=lng,
             speed_kmh=spd,
             status=st,
+            driver_connected=is_driver_active,
             last_updated=b.last_updated.isoformat() if b.last_updated else None,
             stops=[BusStop(**s) for s in stops],
             waypoints=waypoints

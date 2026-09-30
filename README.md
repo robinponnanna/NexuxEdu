@@ -1,4 +1,4 @@
-# OmniCampus ERP & SafeTransit Fleet Intelligence Engine
+# NexusEdu ERP & SafeTransit Fleet Intelligence Engine
 
 > **Multi-Agent RBAC-Grounded Campus ERP, Telematics Visualizer & Academic Intelligence System**
 
@@ -6,9 +6,9 @@
 
 ## 📌 Main Objective
 
-**OmniCampus ERP & SafeTransit** is an enterprise-grade academic management and vehicular fleet tracking platform designed around a **Zero-Trust Multi-Agent Architecture**.
+**NexusEdu ERP & SafeTransit** is an enterprise-grade academic management and vehicular fleet tracking platform designed around a **Zero-Trust Multi-Agent Architecture**.
 
-Traditional ERP and conversational AI systems often suffer from privilege escalation, prompt injection vulnerabilities, and lateral data exposure when users query relational or vector databases. OmniCampus solves this with:
+Traditional ERP and conversational AI systems often suffer from privilege escalation, prompt injection vulnerabilities, and lateral data exposure when users query relational or vector databases. NexusEdu solves this with:
 
 1. **Role-Bound Multi-Agent Fabric**: Specialized worker agents (Structured Records, Filtered Vector RAG, Transit Telematics) execute in sandboxed contexts strictly bounded by cryptographically signed JWT session claims (`user_id`, `role`, `department`, `student_id`, `ward_id`, `bus_id`).
 2. **SafeTransit Telematics & Geofencing**: Live bus fleet tracking rendered on **Standard OpenStreetMap** cartography with 3-second WebSocket coordinate updates, geofence perimeter monitoring, and proximity alerts (500m radius) for students and parents.

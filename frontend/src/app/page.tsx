@@ -18,6 +18,8 @@ import {
   getFacultyClassAttendance,
   FacultyAttendanceRosterResponse,
   FacultyStudentAttendance,
+  createTrackingSession,
+  CreateTrackingSessionResponse,
 } from "@/lib/api";
 import {
   GraduationCap,
@@ -42,6 +44,11 @@ import {
   UserCheck,
   RefreshCw,
   Sparkles,
+  Link2,
+  Copy,
+  Check,
+  ExternalLink,
+  Share2,
 } from "lucide-react";
 
 // Dynamically import Leaflet Map to avoid SSR window errors
@@ -111,24 +118,11 @@ const DEFAULT_BUSES: BusDetails[] = [
     route_name: "Route North-4 (Civic Express)",
     driver_name: "Driver Dave #1",
     driver_phone: "+91-9876543001",
-    current_lat: 28.6139,
-    current_lng: 77.209,
-    speed_kmh: 38.0,
+    speed_kmh: 0.0,
     status: "Active",
-    stops: [
-      { name: "Terminal Stop 1", lat: 28.6139, lng: 77.209, sequence: 1 },
-      { name: "Midtown Gate 1", lat: 28.6189, lng: 77.216, sequence: 2 },
-      { name: "Civic Center 1", lat: 28.6259, lng: 77.219, sequence: 3 },
-      { name: "Campus Main Arch 1", lat: 28.6139, lng: 77.209, sequence: 4 },
-    ],
-    waypoints: [
-      [28.6139, 77.209],
-      [28.6189, 77.216],
-      [28.6259, 77.219],
-      [28.6289, 77.212],
-      [28.6219, 77.204],
-      [28.6139, 77.209],
-    ],
+    driver_connected: false,
+    stops: [],
+    waypoints: [],
   },
   {
     id: 2,
@@ -136,22 +130,11 @@ const DEFAULT_BUSES: BusDetails[] = [
     route_name: "Route South-1 (Metro Link)",
     driver_name: "Captain Raj #2",
     driver_phone: "+91-9876543002",
-    current_lat: 28.62,
-    current_lng: 77.215,
-    speed_kmh: 34.5,
+    speed_kmh: 0.0,
     status: "Active",
-    stops: [
-      { name: "Terminal Stop 2", lat: 28.62, lng: 77.215, sequence: 1 },
-      { name: "Midtown Gate 2", lat: 28.625, lng: 77.222, sequence: 2 },
-      { name: "Civic Center 2", lat: 28.632, lng: 77.225, sequence: 3 },
-      { name: "Campus Main Arch 2", lat: 28.62, lng: 77.215, sequence: 4 },
-    ],
-    waypoints: [
-      [28.62, 77.215],
-      [28.625, 77.222],
-      [28.632, 77.225],
-      [28.62, 77.215],
-    ],
+    driver_connected: false,
+    stops: [],
+    waypoints: [],
   },
 ];
 
@@ -325,6 +308,82 @@ export default function HomePage() {
   const [isFacultyRosterLoading, setIsFacultyRosterLoading] = useState<boolean>(false);
   const [noticeToast, setNoticeToast] = useState<string | null>(null);
 
+  // Admin Driver Tracking Link Generation State
+  const [trackingModalOpen, setTrackingModalOpen] = useState<boolean>(false);
+  const [trackingBusId, setTrackingBusId] = useState<number>(1);
+  const [trackingTtlMinutes, setTrackingTtlMinutes] = useState<number>(1440);
+  const [generatedTrackingSession, setGeneratedTrackingSession] = useState<CreateTrackingSessionResponse | null>(null);
+  const [isGeneratingTrackingLink, setIsGeneratingTrackingLink] = useState<boolean>(false);
+  const [copiedLinkSuccess, setCopiedLinkSuccess] = useState<boolean>(false);
+  const [trackingLinkError, setTrackingLinkError] = useState<string | null>(null);
+  const [selectedUrlType, setSelectedUrlType] = useState<"public" | "lan" | "local">("public");
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
+
+  const getActiveTrackingUrl = (
+    session: CreateTrackingSessionResponse | null,
+    urlType: "public" | "lan" | "local"
+  ): string => {
+    if (!session) return "";
+    if (urlType === "public" && session.publicUrl) return session.publicUrl;
+    if (urlType === "lan" && session.lanUrl) return session.lanUrl;
+    if (urlType === "local" && session.localUrl) return session.localUrl;
+    return session.trackingUrl;
+  };
+
+  useEffect(() => {
+    if (!generatedTrackingSession) {
+      setQrCodeDataUrl("");
+      return;
+    }
+    const activeUrl = getActiveTrackingUrl(generatedTrackingSession, selectedUrlType);
+    if (!activeUrl) return;
+
+    import("qrcode").then((QRCodeModule) => {
+      const QRCode = QRCodeModule.default || QRCodeModule;
+      QRCode.toDataURL(activeUrl, {
+        width: 200,
+        margin: 1,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
+      })
+        .then((url) => setQrCodeDataUrl(url))
+        .catch(() => {});
+    });
+  }, [generatedTrackingSession, selectedUrlType]);
+
+  const handleGenerateTrackingLink = async (targetBusId?: number) => {
+    if (!token) return;
+    const busToUse = targetBusId || trackingBusId;
+    try {
+      setIsGeneratingTrackingLink(true);
+      setTrackingLinkError(null);
+      const session = await createTrackingSession(token, busToUse, trackingTtlMinutes);
+      setGeneratedTrackingSession(session);
+      // Auto-select public if available
+      if (session.publicUrl) {
+        setSelectedUrlType("public");
+      } else if (session.lanUrl) {
+        setSelectedUrlType("lan");
+      } else {
+        setSelectedUrlType("local");
+      }
+    } catch (err: any) {
+      setTrackingLinkError(err.message || "Failed to generate driver tracking link");
+    } finally {
+      setIsGeneratingTrackingLink(false);
+    }
+  };
+
+  const handleCopyTrackingLink = () => {
+    const activeUrl = getActiveTrackingUrl(generatedTrackingSession, selectedUrlType);
+    if (!activeUrl) return;
+    navigator.clipboard.writeText(activeUrl);
+    setCopiedLinkSuccess(true);
+    setTimeout(() => setCopiedLinkSuccess(false), 3000);
+  };
+
   // Fetch live metrics based on user role and token
   const loadRoleData = async (authToken: string, currentUser: UserProfile) => {
     try {
@@ -383,7 +442,7 @@ export default function HomePage() {
   // Check login session on mount to automatically determine role & rights
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedSession = localStorage.getItem("omnicampus_session");
+      const savedSession = localStorage.getItem("nexusedu_session") || localStorage.getItem("omnicampus_session");
       if (savedSession) {
         try {
           const session = JSON.parse(savedSession);
@@ -415,6 +474,7 @@ export default function HomePage() {
       setToken(session.token);
       setUser(session.user);
       if (typeof window !== "undefined") {
+        localStorage.setItem("nexusedu_session", JSON.stringify(session));
         localStorage.setItem("omnicampus_session", JSON.stringify(session));
       }
       if (session.user.bus_id) {
@@ -484,7 +544,7 @@ export default function HomePage() {
           <ShieldCheck size={24} />
         </div>
         <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-main)" }}>
-          Verifying OmniCampus Security Claims...
+          Verifying NexusEdu Security Claims...
         </div>
         <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
           Applying zero-trust role bounds & RBAC permissions
@@ -546,7 +606,7 @@ export default function HomePage() {
                 </span>
               </div>
               <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--text-main)", letterSpacing: "-0.02em" }}>
-                Welcome, {user?.name || "OmniCampus User"}
+                Welcome, {user?.name || "NexusEdu User"}
               </h1>
               <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "4px" }}>
                 {user?.role === "student" && "Track course attendance, exam eligibility thresholds, and your assigned transit shuttle."}
@@ -868,31 +928,431 @@ export default function HomePage() {
                 </div>
 
                 {user?.role === "admin" && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", fontWeight: 500 }}>ROUTE (ADMIN):</span>
-                    <select
-                      value={selectedBusId}
-                      onChange={(e) => setSelectedBusId(Number(e.target.value))}
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", fontWeight: 500 }}>ROUTE (ADMIN):</span>
+                      <select
+                        value={selectedBusId}
+                        onChange={(e) => setSelectedBusId(Number(e.target.value))}
+                        style={{
+                          background: "var(--surface-dark)",
+                          color: "var(--text-main)",
+                          border: "1px solid var(--surface-border)",
+                          padding: "6px 10px",
+                          borderRadius: "6px",
+                          fontSize: "0.82rem",
+                          cursor: "pointer",
+                          outline: "none",
+                        }}
+                      >
+                        {buses.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.bus_number} — {b.route_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setTrackingBusId(selectedBusId);
+                        setTrackingModalOpen(!trackingModalOpen);
+                        setGeneratedTrackingSession(null);
+                        setTrackingLinkError(null);
+                      }}
                       style={{
-                        background: "var(--surface-dark)",
-                        color: "var(--text-main)",
-                        border: "1px solid var(--surface-border)",
-                        padding: "6px 10px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        background: trackingModalOpen ? "var(--color-primary-dark)" : "var(--color-primary)",
+                        color: "#FFFFFF",
+                        border: "none",
+                        padding: "7px 14px",
                         borderRadius: "6px",
                         fontSize: "0.82rem",
+                        fontWeight: 600,
                         cursor: "pointer",
-                        outline: "none",
+                        transition: "all 0.15s ease",
+                        boxShadow: "0 2px 6px rgba(79, 70, 229, 0.25)",
                       }}
                     >
-                      {buses.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.bus_number} — {b.route_name}
-                        </option>
-                      ))}
-                    </select>
+                      <Link2 size={14} />
+                      {trackingModalOpen ? "Close Link Generator" : "Generate Driver Link"}
+                    </button>
                   </div>
                 )}
               </div>
+
+              {/* Admin Driver Link Generation Panel */}
+              {user?.role === "admin" && trackingModalOpen && (
+                <div
+                  style={{
+                    background: "var(--surface-card)",
+                    border: "1px solid var(--surface-border)",
+                    borderRadius: "10px",
+                    padding: "20px",
+                    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "1rem", fontWeight: 700, color: "var(--text-main)" }}>
+                        <Share2 size={18} color="var(--color-primary)" />
+                        Real-Time Driver Telemetry Link Generator
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "4px" }}>
+                        Generate a secure, tokenized mobile tracking link. When the bus driver opens this link, coordinates are captured at high accuracy and streamed every 2 seconds via WebSockets.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                      gap: "14px",
+                      marginBottom: "16px",
+                      background: "var(--surface-dark)",
+                      padding: "16px",
+                      borderRadius: "8px",
+                      border: "1px solid var(--surface-border)",
+                    }}
+                  >
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "6px" }}>
+                        TARGET BUS / VEHICLE
+                      </label>
+                      <select
+                        value={trackingBusId}
+                        onChange={(e) => {
+                          const chosenId = Number(e.target.value);
+                          setTrackingBusId(chosenId);
+                          setSelectedBusId(chosenId);
+                        }}
+                        style={{
+                          width: "100%",
+                          background: "var(--surface-card)",
+                          color: "var(--text-main)",
+                          border: "1px solid var(--surface-border)",
+                          padding: "8px 10px",
+                          borderRadius: "6px",
+                          fontSize: "0.84rem",
+                          outline: "none",
+                        }}
+                      >
+                        {buses.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.bus_number} — {b.route_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "6px" }}>
+                        SESSION DURATION (TTL)
+                      </label>
+                      <select
+                        value={trackingTtlMinutes}
+                        onChange={(e) => setTrackingTtlMinutes(Number(e.target.value))}
+                        style={{
+                          width: "100%",
+                          background: "var(--surface-card)",
+                          color: "var(--text-main)",
+                          border: "1px solid var(--surface-border)",
+                          padding: "8px 10px",
+                          borderRadius: "6px",
+                          fontSize: "0.84rem",
+                          outline: "none",
+                        }}
+                      >
+                        <option value={1440}>24 Hours (Full Working Day)</option>
+                        <option value={720}>12 Hours (Standard Shift)</option>
+                        <option value={480}>8 Hours (Single Route Run)</option>
+                        <option value={120}>2 Hours (Test Session)</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "flex-end" }}>
+                      <button
+                        onClick={() => handleGenerateTrackingLink()}
+                        disabled={isGeneratingTrackingLink}
+                        style={{
+                          width: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "8px",
+                          background: "var(--color-primary)",
+                          color: "#FFFFFF",
+                          border: "none",
+                          padding: "9px 16px",
+                          borderRadius: "6px",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          cursor: isGeneratingTrackingLink ? "not-allowed" : "pointer",
+                          opacity: isGeneratingTrackingLink ? 0.7 : 1,
+                        }}
+                      >
+                        {isGeneratingTrackingLink ? (
+                          <>
+                            <RefreshCw size={14} className="animate-spin" />
+                            Generating Session...
+                          </>
+                        ) : (
+                          <>
+                            <Link2 size={16} />
+                            Generate Link
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tracking Link Error Notice */}
+                  {trackingLinkError && (
+                    <div
+                      style={{
+                        background: "#FEF2F2",
+                        border: "1px solid #F87171",
+                        borderRadius: "6px",
+                        padding: "10px 14px",
+                        color: "#DC2626",
+                        fontSize: "0.82rem",
+                        marginBottom: "14px",
+                      }}
+                    >
+                      {trackingLinkError}
+                    </div>
+                  )}
+
+                  {/* Generated Tracking Link Result Box */}
+                  {generatedTrackingSession && (() => {
+                    const activeUrl = getActiveTrackingUrl(generatedTrackingSession, selectedUrlType);
+                    return (
+                      <div
+                        style={{
+                          background: "var(--surface-dark)",
+                          border: "1px solid var(--color-success)",
+                          borderRadius: "10px",
+                          padding: "20px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "16px",
+                          boxShadow: "0 6px 24px rgba(16, 185, 129, 0.12)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--color-success)", fontWeight: 700, fontSize: "0.92rem" }}>
+                            <CheckCircle2 size={20} />
+                            Tracking Session Active for {generatedTrackingSession.busNumber || `Bus #${generatedTrackingSession.busId}`}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                            Expires: {new Date(generatedTrackingSession.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(generatedTrackingSession.expiresAt).toLocaleDateString()})
+                          </div>
+                        </div>
+
+                        {/* Network Endpoint Selector Tabs */}
+                        <div>
+                          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontWeight: 600, textTransform: "uppercase", marginBottom: "6px", letterSpacing: "0.05em" }}>
+                            SELECT NETWORK DESTINATION FOR DRIVER DEVICE:
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                            {generatedTrackingSession.publicUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedUrlType("public")}
+                                style={{
+                                  padding: "6px 12px",
+                                  borderRadius: "6px",
+                                  border: selectedUrlType === "public" ? "1px solid var(--color-success)" : "1px solid var(--surface-border)",
+                                  background: selectedUrlType === "public" ? "rgba(16, 185, 129, 0.15)" : "var(--surface-card)",
+                                  color: selectedUrlType === "public" ? "var(--color-success)" : "var(--text-muted)",
+                                  fontSize: "0.78rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                🌐 Public Mobile Tunnel (HTTPS)
+                              </button>
+                            )}
+
+                            {generatedTrackingSession.lanUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedUrlType("lan")}
+                                style={{
+                                  padding: "6px 12px",
+                                  borderRadius: "6px",
+                                  border: selectedUrlType === "lan" ? "1px solid var(--color-primary)" : "1px solid var(--surface-border)",
+                                  background: selectedUrlType === "lan" ? "rgba(79, 70, 229, 0.15)" : "var(--surface-card)",
+                                  color: selectedUrlType === "lan" ? "var(--color-primary)" : "var(--text-muted)",
+                                  fontSize: "0.78rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                📶 Local Wi-Fi Network (LAN)
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedUrlType("local")}
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                border: selectedUrlType === "local" ? "1px solid var(--surface-border-subtle)" : "1px solid var(--surface-border)",
+                                background: selectedUrlType === "local" ? "var(--surface-elevated)" : "var(--surface-card)",
+                                color: selectedUrlType === "local" ? "var(--text-main)" : "var(--text-muted)",
+                                fontSize: "0.78rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              💻 Localhost (This PC)
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* QR Code & Share Layout */}
+                        <div style={{ display: "grid", gridTemplateColumns: qrCodeDataUrl ? "auto 1fr" : "1fr", gap: "16px", alignItems: "center" }}>
+                          {qrCodeDataUrl && (
+                            <div
+                              style={{
+                                background: "#FFFFFF",
+                                padding: "10px",
+                                borderRadius: "10px",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: "6px",
+                                boxShadow: "0 4px 14px rgba(0, 0, 0, 0.15)",
+                              }}
+                            >
+                              <img
+                                src={qrCodeDataUrl}
+                                alt="Driver Tracking QR Code"
+                                style={{ width: "130px", height: "130px", display: "block" }}
+                              />
+                              <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "#111827", letterSpacing: "0.02em" }}>
+                                📲 SCAN WITH PHONE
+                              </span>
+                            </div>
+                          )}
+
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                            {/* Link Input Bar with Copy Link Button */}
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              <input
+                                type="text"
+                                readOnly
+                                value={activeUrl}
+                                style={{
+                                  flex: 1,
+                                  minWidth: "220px",
+                                  background: "var(--surface-card)",
+                                  color: "var(--text-main)",
+                                  border: "1px solid var(--surface-border)",
+                                  padding: "9px 12px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.83rem",
+                                  fontFamily: "monospace",
+                                  outline: "none",
+                                }}
+                              />
+
+                              <button
+                                onClick={handleCopyTrackingLink}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  background: copiedLinkSuccess ? "var(--color-success)" : "var(--color-primary)",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  padding: "9px 16px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.84rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  transition: "background 0.2s ease",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {copiedLinkSuccess ? (
+                                  <>
+                                    <Check size={16} />
+                                    Copied!
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy size={16} />
+                                    Copy Link
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const text = encodeURIComponent(`NexusEdu Real-Time Bus Tracking Link for ${generatedTrackingSession.busNumber || "Vehicle"}: ${activeUrl}`);
+                                  window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+                                }}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  background: "#25D366",
+                                  color: "#FFFFFF",
+                                  border: "none",
+                                  padding: "9px 14px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.82rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title="Share tracking link via WhatsApp"
+                              >
+                                WhatsApp
+                              </button>
+
+                              <a
+                                href={activeUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  background: "var(--surface-card)",
+                                  color: "var(--text-main)",
+                                  border: "1px solid var(--surface-border)",
+                                  padding: "9px 14px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.82rem",
+                                  fontWeight: 600,
+                                  textDecoration: "none",
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                <ExternalLink size={15} />
+                                Open App
+                              </a>
+                            </div>
+
+                            <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: 1.45 }}>
+                              💡 <strong>Tracking Other Devices:</strong> Open this link on the driver's smartphone (or scan the QR code). When the driver taps <strong>"Start Live GPS Tracking"</strong>, the phone's hardware GPS streams high-precision position, velocity, and accuracy to this map every 2 seconds.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Map Canvas */}
               <div style={{ height: "620px" }}>

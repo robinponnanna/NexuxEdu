@@ -2,21 +2,20 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
-import { BusDetails, getTransitWebSocketUrl } from "@/lib/api";
+import { BusDetails, getTransitWebSocketUrl, getUnifiedWebSocketUrl, getBusById } from "@/lib/api";
 import {
   Navigation,
   Gauge,
-  Clock,
-  MapPin,
   Wifi,
   Radio,
-  Bell,
-  X,
-  ShieldCheck,
   Compass,
-  Maximize2,
+  Crosshair,
+  Activity,
+  Layers,
+  Trash2,
+  Smartphone,
+  SmartphoneNfc,
 } from "lucide-react";
-
 
 interface LiveTransitMapProps {
   bus: BusDetails;
@@ -28,31 +27,209 @@ export const LiveTransitMap: React.FC<LiveTransitMapProps> = ({ bus, token, user
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const busMarkerRef = useRef<any>(null);
-  const polylineRef = useRef<any>(null);
-  const stopMarkersRef = useRef<any[]>([]);
-  const geofenceCircleRef = useRef<any>(null);
-  const tileLayerRef = useRef<any>(null);
+  const accuracyCircleRef = useRef<any>(null);
+  const trailPolylineRef = useRef<any>(null);
+  const trailPointsRef = useRef<[number, number][]>([]);
 
-  const [currentCoord, setCurrentCoord] = useState<{ lat: number; lng: number }>({
-    lat: bus.current_lat,
-    lng: bus.current_lng,
-  });
-  const [speed, setSpeed] = useState<number>(bus.speed_kmh || 35.0);
-  const [status, setStatus] = useState<string>(bus.status || "Active");
-  const [nextStop, setNextStop] = useState<string>(bus.stops?.[1]?.name || "Midtown Gate");
-  const [etaMins, setEtaMins] = useState<number>(5);
-  const [distanceKm, setDistanceKm] = useState<number>(1.2);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
-
-  // 500m Geofencing Proximity State
-  const [geofenceActive, setGeofenceActive] = useState<boolean>(false);
-  const [distanceToRegStopM, setDistanceToRegStopM] = useState<number>(1200);
-  const [registeredStopName, setRegisteredStopName] = useState<string>(
-    bus.stops?.[1]?.name || "Midtown Gate"
+  // Driver connection & location state
+  const isInitiallyConnected = Boolean(bus.driver_connected);
+  const hasValidCoords = Boolean(
+    isInitiallyConnected &&
+    bus.current_lat !== undefined &&
+    bus.current_lat !== null &&
+    bus.current_lng !== undefined &&
+    bus.current_lng !== null &&
+    !isNaN(bus.current_lat) &&
+    !isNaN(bus.current_lng)
   );
-  const [alertDismissed, setAlertDismissed] = useState<boolean>(false);
 
-  // Initialize Leaflet Map
+  const [driverConnected, setDriverConnected] = useState<boolean>(isInitiallyConnected);
+  const [currentCoord, setCurrentCoord] = useState<{ lat: number; lng: number } | null>(
+    hasValidCoords ? { lat: bus.current_lat!, lng: bus.current_lng! } : null
+  );
+  const [speed, setSpeed] = useState<number>(bus.speed_kmh || 0.0);
+  const [status, setStatus] = useState<string>(bus.status || "Active");
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [autoFollow, setAutoFollow] = useState<boolean>(true);
+  const [lastUpdateAgo, setLastUpdateAgo] = useState<number>(0);
+  const [totalUpdatesReceived, setTotalUpdatesReceived] = useState<number>(0);
+
+  const autoFollowRef = useRef<boolean>(true);
+  const lastUpdateTimestampRef = useRef<number>(Date.now());
+
+  useEffect(() => {
+    autoFollowRef.current = autoFollow;
+  }, [autoFollow]);
+
+  // Sync state when bus prop changes
+  useEffect(() => {
+    const conn = Boolean(bus.driver_connected);
+    setDriverConnected(conn);
+    if (!conn) {
+      setCurrentCoord(null);
+      setSpeed(0.0);
+      if (busMarkerRef.current && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(busMarkerRef.current);
+        busMarkerRef.current = null;
+      }
+      if (accuracyCircleRef.current && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(accuracyCircleRef.current);
+        accuracyCircleRef.current = null;
+      }
+    } else if (bus.current_lat && bus.current_lng) {
+      setCurrentCoord({ lat: bus.current_lat, lng: bus.current_lng });
+      setSpeed(bus.speed_kmh || 0.0);
+    }
+  }, [bus.id, bus.driver_connected, bus.current_lat, bus.current_lng, bus.speed_kmh]);
+
+  // Heartbeat timer to show seconds since last refresh
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - lastUpdateTimestampRef.current) / 1000);
+      setLastUpdateAgo(elapsed);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Central position updater that refreshes marker, accuracy circle, breadcrumb trail, HUD, and camera
+  const updateBusPosition = (
+    newLat: number,
+    newLng: number,
+    newSpeed?: number,
+    newAcc?: number,
+    isDriver?: boolean
+  ) => {
+    if (isNaN(newLat) || isNaN(newLng)) return;
+
+    setDriverConnected(true);
+    setCurrentCoord({ lat: newLat, lng: newLng });
+    if (newSpeed !== undefined && !isNaN(newSpeed)) setSpeed(newSpeed);
+    if (newAcc !== undefined && !isNaN(newAcc)) setAccuracy(newAcc);
+    lastUpdateTimestampRef.current = Date.now();
+    setLastUpdateAgo(0);
+    setTotalUpdatesReceived((prev) => prev + 1);
+
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    import("leaflet").then((LModule) => {
+      const L = LModule.default || LModule;
+
+      // 1. Update or create live vehicle marker
+      if (busMarkerRef.current) {
+        busMarkerRef.current.setLatLng([newLat, newLng]);
+        busMarkerRef.current.setPopupContent(`
+          <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; color: #0F172A; line-height: 1.4;">
+            <div style="font-weight: 700; color: #0F172A; font-size: 13px;">🚌 ${bus.bus_number}</div>
+            <div style="color: #64748B; font-size: 11px; margin-bottom: 4px;">${bus.route_name}</div>
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; padding: 4px 6px; border-radius: 4px; font-family: monospace; font-size: 11px; color: #0284C7; font-weight: 600;">
+              ${newLat.toFixed(6)}° N, ${newLng.toFixed(6)}° E
+            </div>
+            <div style="margin-top: 4px; font-size: 11px; color: #334155;">
+              Speed: <strong>${(newSpeed || 0).toFixed(1)} km/h</strong> • Precision: ±${Math.round(newAcc || 4)}m
+            </div>
+          </div>
+        `);
+      } else {
+        const busIcon = L.divIcon({
+          className: "custom-bus-icon",
+          html: `
+            <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+              <div class="bus-beacon"></div>
+              <div style="
+                position: absolute;
+                bottom: -18px;
+                background: #FFFFFF;
+                color: #0F172A;
+                padding: 2px 7px;
+                border-radius: 4px;
+                font-size: 10px;
+                font-family: 'JetBrains Mono', monospace;
+                font-weight: 700;
+                white-space: nowrap;
+                border: 1.5px solid #0F172A;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+              ">
+                🚌 ${bus.bus_number}
+              </div>
+            </div>
+          `,
+          iconSize: [44, 44],
+          iconAnchor: [22, 22],
+        });
+
+        const newMarker = L.marker([newLat, newLng], { icon: busIcon })
+          .bindPopup(`
+            <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; color: #0F172A;">
+              <strong>${bus.bus_number}</strong> (${bus.route_name})<br/>
+              Driver: ${bus.driver_name}<br/>
+              Lat: ${newLat.toFixed(6)}, Lng: ${newLng.toFixed(6)}
+            </div>
+          `)
+          .addTo(map);
+
+        busMarkerRef.current = newMarker;
+
+        // First fix zoom-in
+        map.setView([newLat, newLng], 16, { animate: true });
+      }
+
+      // 2. Update or create GPS accuracy circle
+      const accRadius = newAcc !== undefined && !isNaN(newAcc) ? newAcc : 10;
+      if (accuracyCircleRef.current) {
+        accuracyCircleRef.current.setLatLng([newLat, newLng]);
+        accuracyCircleRef.current.setRadius(accRadius);
+      } else {
+        accuracyCircleRef.current = L.circle([newLat, newLng], {
+          radius: accRadius,
+          color: "#16A34A",
+          weight: 1.5,
+          fillColor: "#16A34A",
+          fillOpacity: 0.12,
+        }).addTo(map);
+      }
+
+      // 3. Update dynamic real-time breadcrumb trail (traces exact path driven by device)
+      trailPointsRef.current.push([newLat, newLng]);
+      if (trailPointsRef.current.length > 500) {
+        trailPointsRef.current.shift();
+      }
+
+      if (trailPolylineRef.current) {
+        trailPolylineRef.current.setLatLngs(trailPointsRef.current);
+      } else {
+        trailPolylineRef.current = L.polyline(trailPointsRef.current, {
+          color: "#0284C7",
+          weight: 4,
+          opacity: 0.85,
+          lineJoin: "round",
+        }).addTo(map);
+      }
+
+      // 4. Auto-follow camera: smoothly pan to keep moving device in center
+      if (autoFollowRef.current) {
+        map.panTo([newLat, newLng], { animate: true, duration: 1.0 });
+      }
+    });
+  };
+
+  // Remove marker and accuracy circle when disconnected
+  const handleDeviceDisconnected = () => {
+    setDriverConnected(false);
+    setCurrentCoord(null);
+    setSpeed(0.0);
+    if (busMarkerRef.current && mapInstanceRef.current) {
+      mapInstanceRef.current.removeLayer(busMarkerRef.current);
+      busMarkerRef.current = null;
+    }
+    if (accuracyCircleRef.current && mapInstanceRef.current) {
+      mapInstanceRef.current.removeLayer(accuracyCircleRef.current);
+      accuracyCircleRef.current = null;
+    }
+  };
+
+  // Initialize Leaflet Map (Zero Static Points: Clean white cartography)
   useEffect(() => {
     if (typeof window === "undefined" || !mapContainerRef.current) return;
 
@@ -68,168 +245,102 @@ export const LiveTransitMap: React.FC<LiveTransitMapProps> = ({ bus, token, user
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        busMarkerRef.current = null;
+        accuracyCircleRef.current = null;
+        trailPolylineRef.current = null;
+        trailPointsRef.current = [];
       }
 
-      // Initialize Leaflet map
+      // Determine initial center
+      const initialCenter: [number, number] =
+        bus.driver_connected && bus.current_lat && bus.current_lng
+          ? [bus.current_lat, bus.current_lng]
+          : [20.5937, 78.9629]; // Clean overview
+
+      const initialZoom = bus.driver_connected && bus.current_lat && bus.current_lng ? 15 : 5;
+
       const map = L.map(mapContainerRef.current, {
-        center: [bus.current_lat, bus.current_lng],
-        zoom: 14,
+        center: initialCenter,
+        zoom: initialZoom,
         zoomControl: false,
         attributionControl: true,
       });
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
 
-      // Exclusively use Standard OpenStreetMap Cartography
-      const tileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      // Clean OpenStreetMap Layer (Standard White Cartography)
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
         subdomains: ["a", "b", "c"],
       }).addTo(map);
-      tileLayerRef.current = tileLayer;
-
 
       mapInstanceRef.current = map;
 
-      // Draw Route Polyline
-      if (bus.waypoints && bus.waypoints.length > 0) {
-        const polyline = L.polyline(bus.waypoints as [number, number][], {
-          color: "#4F46E5",
+      // If driver is currently active with coordinates, place marker
+      if (bus.driver_connected && bus.current_lat && bus.current_lng) {
+        const busIcon = L.divIcon({
+          className: "custom-bus-icon",
+          html: `
+            <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
+              <div class="bus-beacon"></div>
+              <div style="
+                position: absolute;
+                bottom: -18px;
+                background: #FFFFFF;
+                color: #0F172A;
+                padding: 2px 7px;
+                border-radius: 4px;
+                font-size: 10px;
+                font-family: 'JetBrains Mono', monospace;
+                font-weight: 700;
+                white-space: nowrap;
+                border: 1.5px solid #0F172A;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+              ">
+                🚌 ${bus.bus_number}
+              </div>
+            </div>
+          `,
+          iconSize: [44, 44],
+          iconAnchor: [22, 22],
+        });
+
+        const marker = L.marker([bus.current_lat, bus.current_lng], { icon: busIcon })
+          .bindPopup(`
+            <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; color: #0F172A;">
+              <strong>${bus.bus_number}</strong> (${bus.route_name})<br/>
+              Live Speed: ${bus.speed_kmh || 0} km/h
+            </div>
+          `)
+          .addTo(map);
+
+        busMarkerRef.current = marker;
+        trailPointsRef.current = [[bus.current_lat, bus.current_lng]];
+
+        trailPolylineRef.current = L.polyline(trailPointsRef.current, {
+          color: "#0284C7",
           weight: 4,
-          opacity: 0.8,
-          dashArray: "3, 6",
+          opacity: 0.85,
           lineJoin: "round",
         }).addTo(map);
-        polylineRef.current = polyline;
 
-        // Auto-fit bounds to display the whole route on initial render
-        try {
-          const bounds = L.latLngBounds(bus.waypoints as [number, number][]);
-          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-        } catch (e) {
-          // ignore
-        }
+        accuracyCircleRef.current = L.circle([bus.current_lat, bus.current_lng], {
+          radius: 12,
+          color: "#16A34A",
+          weight: 1.5,
+          fillColor: "#16A34A",
+          fillOpacity: 0.12,
+        }).addTo(map);
       }
 
-      // Render Stop Markers & 500m Geofence Radius Perimeter
-      if (bus.stops) {
-        bus.stops.forEach((stop, i) => {
-          const isRegisteredParentStop = i === 1; // Default registered stop
-
-          // Draw the 500-meter translucent geofencing radius around registered parent stop
-          if (isRegisteredParentStop) {
-            const geofenceCircle = L.circle([stop.lat, stop.lng], {
-              radius: 500, // 500 meters
-              color: "#FBBF24",
-              fillColor: "#FBBF24",
-              fillOpacity: 0.08,
-              weight: 1.5,
-              dashArray: "4, 4",
-            }).addTo(map);
-
-            geofenceCircle.bindPopup(
-              `<div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; color: #0F172A; line-height: 1.4;">
-                <strong style="color: #D97706;">🔔 500m Geofence Zone</strong><br/>
-                Pickup Stop: <strong>${stop.name}</strong><br/>
-                Arrival alerts trigger automatically when the bus enters this boundary.
-              </div>`
-            );
-            geofenceCircleRef.current = geofenceCircle;
-          }
-
-          const stopIcon = L.divIcon({
-            className: "custom-stop-marker",
-            html: `
-              <div style="
-                background: ${isRegisteredParentStop ? "#D97706" : "#FFFFFF"};
-                color: ${isRegisteredParentStop ? "#FFFFFF" : "#0F172A"};
-                width: 24px;
-                height: 24px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 10px;
-                font-weight: 700;
-                border: 1.5px solid ${isRegisteredParentStop ? "#F59E0B" : "#CBD5E1"};
-                box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-              ">
-                ${stop.sequence}
-              </div>
-            `,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12],
-          });
-
-          const marker = L.marker([stop.lat, stop.lng], { icon: stopIcon })
-            .bindPopup(
-              `<div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; color: #0F172A;">
-                <strong>${stop.name}</strong> (Stop #${stop.sequence})<br/>
-                ${
-                  isRegisteredParentStop
-                    ? "<span style='color: #D97706; font-weight: 600;'>⭐ Registered SafeTransit Pickup Stop</span>"
-                    : "Scheduled Campus Transit Stop"
-                }
-              </div>`
-            )
-            .addTo(map);
-          stopMarkersRef.current.push(marker);
-        });
-      }
-
-      // Custom animated Bus Beacon marker
-      const busIcon = L.divIcon({
-        className: "custom-bus-icon",
-        html: `
-          <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
-            <div class="bus-beacon"></div>
-            <div style="
-              position: absolute;
-              bottom: -18px;
-              background: rgba(15, 23, 42, 0.95);
-              color: #F8FAFC;
-              padding: 2px 6px;
-              border-radius: 4px;
-              font-size: 10px;
-              font-family: 'JetBrains Mono', monospace;
-              font-weight: 700;
-              white-space: nowrap;
-              border: 1px solid rgba(245, 158, 11, 0.7);
-              box-shadow: 0 2px 8px rgba(0,0,0,0.6);
-            ">
-              🚌 ${bus.bus_number}
-            </div>
-          </div>
-        `,
-        iconSize: [44, 44],
-        iconAnchor: [22, 22],
-      });
-
-      const busMarker = L.marker([bus.current_lat, bus.current_lng], { icon: busIcon })
-        .bindPopup(
-          `<div style="font-family: sans-serif; font-size: 12px; color: #0F172A;">
-            <strong>${bus.bus_number}</strong> (${bus.route_name})<br/>
-            Driver: ${bus.driver_name} (${bus.driver_phone})<br/>
-            Live Speed: ${bus.speed_kmh} km/h
-          </div>`
-        )
-        .addTo(map);
-      busMarkerRef.current = busMarker;
-
-      // Crucial Leaflet Fix: Invalidate map size to prevent gray/unrendered tiles
+      // Invalidate map size
       setTimeout(() => {
         if (mapInstanceRef.current) {
           mapInstanceRef.current.invalidateSize();
         }
-      }, 200);
+      }, 250);
 
-      setTimeout(() => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.invalidateSize();
-        }
-      }, 600);
-
-      // Auto-recalculate size when container dimensions change
       if (mapContainerRef.current) {
         resizeObserver = new ResizeObserver(() => {
           if (mapInstanceRef.current) {
@@ -249,11 +360,44 @@ export const LiveTransitMap: React.FC<LiveTransitMapProps> = ({ bus, token, user
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
+      busMarkerRef.current = null;
+      accuracyCircleRef.current = null;
+      trailPolylineRef.current = null;
+      trailPointsRef.current = [];
     };
   }, [bus.id]);
 
+  // 2-second continuous polling refresh to guarantee updates every 2000ms
+  useEffect(() => {
+    if (!token || !bus.id) return;
+    let isCancelled = false;
 
-  // Connect to WebSocket for live 3-second telemetry streaming
+    const interval = setInterval(async () => {
+      if (isCancelled) return;
+      try {
+        const latest = await getBusById(token, bus.id);
+        if (latest && !isCancelled) {
+          if (latest.driver_connected) {
+            if (latest.current_lat !== undefined && latest.current_lat !== null &&
+                latest.current_lng !== undefined && latest.current_lng !== null) {
+              updateBusPosition(latest.current_lat, latest.current_lng, latest.speed_kmh, undefined, true);
+            }
+          } else {
+            handleDeviceDisconnected();
+          }
+        }
+      } catch (e) {
+        // ignore polling error
+      }
+    }, 2000);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
+  }, [bus.id, token]);
+
+  // Connect to WebSocket for real-time telemetry streaming from driver
   useEffect(() => {
     if (!token || !bus.id) return;
 
@@ -264,47 +408,48 @@ export const LiveTransitMap: React.FC<LiveTransitMapProps> = ({ bus, token, user
     function connect() {
       if (isCancelled) return;
       try {
-        const wsUrl = getTransitWebSocketUrl(bus.id, token);
+        const wsUrl = getUnifiedWebSocketUrl(token);
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
           if (!isCancelled) setIsConnected(true);
         };
 
-        ws.onmessage = (event) => {
+        const handleWsMessage = (event: MessageEvent) => {
           if (isCancelled) return;
           try {
             const data = JSON.parse(event.data);
-            if (data.lat && data.lng) {
-              const newLat = parseFloat(data.lat);
-              const newLng = parseFloat(data.lng);
-              setCurrentCoord({ lat: newLat, lng: newLng });
-              setSpeed(data.speed_kmh || 35.0);
-              setStatus(data.status || "Active");
-              if (data.next_stop) setNextStop(data.next_stop);
-              if (data.next_stop_eta_mins) setEtaMins(data.next_stop_eta_mins);
-              if (data.distance_to_stop_km) setDistanceKm(data.distance_to_stop_km);
+            const targetBusId = data.busId || data.bus_id || bus.id;
 
-              // 500m Geofence fields from backend
-              if (data.geofence_active !== undefined) {
-                setGeofenceActive(Boolean(data.geofence_active));
+            // Handle driver connection / status updates
+            if (data.type === "driver-status-update" && targetBusId === bus.id) {
+              if (data.driverConnected) {
+                setDriverConnected(true);
+              } else {
+                handleDeviceDisconnected();
               }
-              if (data.distance_to_registered_stop_m !== undefined) {
-                setDistanceToRegStopM(data.distance_to_registered_stop_m);
-              }
-              if (data.registered_stop_name) {
-                setRegisteredStopName(data.registered_stop_name);
-              }
+              return;
+            }
 
-              // Smoothly pan marker and canvas
-              if (busMarkerRef.current) {
-                busMarkerRef.current.setLatLng([newLat, newLng]);
-              }
+            const lat = data.latitude !== undefined ? data.latitude : data.lat;
+            const lng = data.longitude !== undefined ? data.longitude : data.lng;
+
+            if (lat !== undefined && lng !== undefined && targetBusId === bus.id) {
+              const newLat = parseFloat(lat);
+              const newLng = parseFloat(lng);
+              const spd = data.speed_kmh !== undefined ? data.speed_kmh : data.speed;
+              const acc = data.accuracy !== undefined ? data.accuracy : undefined;
+
+              updateBusPosition(newLat, newLng, spd, acc, data.driverConnected);
+
+              if (data.status) setStatus(data.status);
             }
           } catch (e) {
             console.error("Failed to parse telemetry packet", e);
           }
         };
+
+        ws.onmessage = handleWsMessage;
 
         ws.onclose = () => {
           if (!isCancelled) {
@@ -314,7 +459,19 @@ export const LiveTransitMap: React.FC<LiveTransitMapProps> = ({ bus, token, user
         };
 
         ws.onerror = () => {
-          if (!isCancelled) setIsConnected(false);
+          if (!isCancelled) {
+            try {
+              if (ws) ws.close();
+              const fallbackUrl = getTransitWebSocketUrl(bus.id, token);
+              const fallbackWs = new WebSocket(fallbackUrl);
+              fallbackWs.onmessage = handleWsMessage;
+              fallbackWs.onopen = () => setIsConnected(true);
+              fallbackWs.onclose = () => setIsConnected(false);
+              ws = fallbackWs;
+            } catch (fallbackErr) {
+              setIsConnected(false);
+            }
+          }
         };
       } catch (err) {
         console.error("WebSocket connection failure", err);
@@ -332,22 +489,20 @@ export const LiveTransitMap: React.FC<LiveTransitMapProps> = ({ bus, token, user
 
   // Center map on moving bus
   const handleRecenter = () => {
-    if (mapInstanceRef.current) {
+    if (mapInstanceRef.current && currentCoord) {
       mapInstanceRef.current.panTo([currentCoord.lat, currentCoord.lng], {
         animate: true,
         duration: 0.8,
       });
-      mapInstanceRef.current.setZoom(15);
+      mapInstanceRef.current.setZoom(16);
     }
   };
 
-  // Zoom to full route extent
-  const handleFitRoute = () => {
-    if (mapInstanceRef.current && bus.waypoints && bus.waypoints.length > 0) {
-      import("leaflet").then(({ default: L }) => {
-        const bounds = L.latLngBounds(bus.waypoints as [number, number][]);
-        mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-      });
+  // Clear live breadcrumb trail
+  const handleClearTrail = () => {
+    trailPointsRef.current = currentCoord ? [[currentCoord.lat, currentCoord.lng]] : [];
+    if (trailPolylineRef.current) {
+      trailPolylineRef.current.setLatLngs(trailPointsRef.current);
     }
   };
 
@@ -361,6 +516,7 @@ export const LiveTransitMap: React.FC<LiveTransitMapProps> = ({ bus, token, user
         borderRadius: "14px",
         overflow: "hidden",
         border: "1px solid var(--surface-border)",
+        background: "#FFFFFF",
       }}
     >
       {/* Leaflet Map Canvas */}
@@ -374,7 +530,69 @@ export const LiveTransitMap: React.FC<LiveTransitMapProps> = ({ bus, token, user
         }}
       />
 
-      {/* ================= MAP CONTROLS OVERLAY (BOTTOM-LEFT) ================= */}
+      {/* ================= AWAITING LIVE DRIVER SIGNAL OVERLAY (WHITE THEME) ================= */}
+      {!driverConnected && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 1000,
+            background: "rgba(255, 255, 255, 0.95)",
+            backdropFilter: "blur(14px)",
+            border: "1px solid #E2E8F0",
+            borderRadius: "14px",
+            padding: "24px 28px",
+            color: "#0F172A",
+            textAlign: "center",
+            maxWidth: "460px",
+            boxShadow: "0 20px 40px rgba(0, 0, 0, 0.08)",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "50%",
+              background: "#F1F5F9",
+              border: "1px solid #E2E8F0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 14px",
+              color: "#64748B",
+            }}
+          >
+            <Smartphone size={24} />
+          </div>
+          <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "8px", color: "#0F172A" }}>
+            No Device is Connected
+          </h3>
+          <p style={{ fontSize: "0.84rem", color: "#64748B", lineHeight: 1.5, marginBottom: "16px" }}>
+            To track <strong>{bus.bus_number}</strong>, open the driver link on a smartphone and tap <strong>"Start Live GPS Tracking"</strong>. Once connected, live coordinates will instantly refresh on this map every 2 seconds.
+          </p>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "#F8FAFC",
+              color: "#475569",
+              border: "1px solid #E2E8F0",
+              padding: "6px 14px",
+              borderRadius: "6px",
+              fontSize: "0.75rem",
+              fontWeight: 600,
+            }}
+          >
+            <Radio size={13} className="animate-pulse" color="#0284C7" />
+            <span>Listening for device on WebSocket room bus:{bus.id}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MAP CONTROLS OVERLAY (BOTTOM-LEFT - WHITE THEME) ================= */}
       <div
         style={{
           position: "absolute",
@@ -385,237 +603,241 @@ export const LiveTransitMap: React.FC<LiveTransitMapProps> = ({ bus, token, user
           gap: "8px",
         }}
       >
-        <button
-          type="button"
-          onClick={handleRecenter}
-          style={{
-            background: "var(--surface-card)",
-            color: "var(--text-main)",
-            border: "1px solid var(--surface-border)",
-            borderRadius: "8px",
-            padding: "8px 12px",
-            fontSize: "0.78rem",
-            fontWeight: 600,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            boxShadow: "var(--shadow-md)",
-          }}
-          title="Center on Live Bus"
-        >
-          <Compass size={14} color="var(--color-primary)" />
-          <span>Center Bus</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={handleFitRoute}
-          style={{
-            background: "var(--surface-card)",
-            color: "var(--text-main)",
-            border: "1px solid var(--surface-border)",
-            borderRadius: "8px",
-            padding: "8px 12px",
-            fontSize: "0.78rem",
-            fontWeight: 600,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            boxShadow: "var(--shadow-md)",
-          }}
-          title="View Full Route"
-        >
-          <Maximize2 size={14} color="var(--color-student)" />
-          <span>Full Route</span>
-        </button>
-      </div>
-
-
-      {/* ================= GEOFENCING 500M PROXIMITY ALERT TOAST BANNER ================= */}
-      {geofenceActive && !alertDismissed && (
-        <div
-          style={{
-            position: "absolute",
-            top: "16px",
-            right: "16px",
-            zIndex: 1001,
-            padding: "12px 16px",
-            borderRadius: "10px",
-            border: "1px solid #FDE68A",
-            background: "rgba(255, 255, 255, 0.96)",
-            backdropFilter: "blur(12px)",
-            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            maxWidth: "440px",
-            animation: "slideIn 0.3s ease",
-          }}
-        >
-          <div
-            style={{
-              width: "32px",
-              height: "32px",
-              borderRadius: "8px",
-              background: "#FFFBEB",
-              border: "1px solid #FDE68A",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#D97706",
-              flexShrink: 0,
-            }}
-          >
-            <Bell size={16} />
-          </div>
-
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#D97706", fontWeight: 700, fontSize: "0.76rem", letterSpacing: "0.03em" }}>
-              <Radio size={12} className="animate-pulse" />
-              <span>500M PROXIMITY ALERT</span>
-            </div>
-            <div style={{ fontSize: "0.8rem", color: "var(--text-main)", marginTop: "2px", lineHeight: 1.4 }}>
-              <strong>{bus.bus_number}</strong> entered the pickup perimeter of <em>{registeredStopName}</em>.
-            </div>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "3px" }}>
-              Distance: <span className="font-mono" style={{ color: "#D97706", fontWeight: 600 }}>{distanceToRegStopM}m</span> • ETA: ~{etaMins} mins
-            </div>
-          </div>
-
+        {driverConnected && currentCoord && (
           <button
             type="button"
-            onClick={() => setAlertDismissed(true)}
+            onClick={handleRecenter}
             style={{
-              background: "transparent",
-              border: "none",
-              color: "var(--text-dim)",
+              background: "#FFFFFF",
+              color: "#0F172A",
+              border: "1px solid #E2E8F0",
+              borderRadius: "8px",
+              padding: "8px 12px",
+              fontSize: "0.78rem",
+              fontWeight: 600,
               cursor: "pointer",
-              padding: "4px",
-              borderRadius: "4px",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              transition: "color 0.15s ease",
+              gap: "6px",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.06)",
             }}
-            title="Dismiss Alert"
+            title="Center on Live Bus"
           >
-            <X size={16} />
+            <Compass size={14} color="#0284C7" />
+            <span>Center Device</span>
           </button>
-        </div>
-      )}
+        )}
 
-      {/* ================= TELEMETRY HUD OVERLAY (TOP-LEFT) ================= */}
+        <button
+          type="button"
+          onClick={() => setAutoFollow(!autoFollow)}
+          style={{
+            background: autoFollow ? "#ECFDF5" : "#FFFFFF",
+            color: autoFollow ? "#059669" : "#0F172A",
+            border: autoFollow ? "1px solid #A7F3D0" : "1px solid #E2E8F0",
+            borderRadius: "8px",
+            padding: "8px 12px",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.06)",
+          }}
+          title="Auto-Follow Moving Bus Camera"
+        >
+          <Crosshair size={14} color={autoFollow ? "#059669" : "#64748B"} />
+          <span>Auto-Follow: {autoFollow ? "ON" : "OFF"}</span>
+        </button>
+
+        {trailPointsRef.current.length > 1 && (
+          <button
+            type="button"
+            onClick={handleClearTrail}
+            style={{
+              background: "#FFFFFF",
+              color: "#64748B",
+              border: "1px solid #E2E8F0",
+              borderRadius: "8px",
+              padding: "8px 12px",
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.06)",
+            }}
+            title="Reset Live Breadcrumb Trail"
+          >
+            <Trash2 size={13} />
+            <span>Reset Path</span>
+          </button>
+        )}
+      </div>
+
+      {/* ================= REAL-TIME TELEMETRY HUD OVERLAY (TOP-LEFT - WHITE THEME) ================= */}
       <div
         style={{
           position: "absolute",
           top: "16px",
           left: "16px",
           zIndex: 1000,
-          padding: "14px 16px",
-          borderRadius: "10px",
-          background: "rgba(255, 255, 255, 0.96)",
-          backdropFilter: "blur(12px)",
-          border: "1px solid var(--surface-border)",
+          padding: "16px",
+          borderRadius: "12px",
+          background: "#FFFFFF",
+          border: "1px solid #E2E8F0",
           display: "flex",
           flexDirection: "column",
           gap: "10px",
-          minWidth: "260px",
-          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
+          minWidth: "290px",
+          boxShadow: "0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.03)",
+          color: "#0F172A",
         }}
       >
         {/* Header line */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--surface-border)", paddingBottom: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #E2E8F0", paddingBottom: "10px" }}>
           <div>
-            <div style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: "6px" }}>
-              <Navigation size={15} color="var(--text-muted)" />
+            <div style={{ fontSize: "0.96rem", fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: "6px" }}>
+              <Navigation size={15} color="#0284C7" />
               <span>{bus.bus_number}</span>
             </div>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "1px" }}>
+            <div style={{ fontSize: "0.72rem", color: "#64748B", marginTop: "1px" }}>
               {bus.route_name}
             </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              fontSize: "0.68rem",
-              fontWeight: 600,
-              padding: "3px 8px",
-              borderRadius: "6px",
-              background: isConnected ? "#ECFDF5" : "#FFFBEB",
-              color: isConnected ? "#059669" : "#D97706",
-              border: `1px solid ${isConnected ? "#A7F3D0" : "#FDE68A"}`,
-            }}
-          >
-            <Wifi size={11} />
-            <span>{isConnected ? "LIVE (3s)" : "CONNECTING"}</span>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                fontSize: "0.68rem",
+                fontWeight: 600,
+                padding: "3px 8px",
+                borderRadius: "6px",
+                background: isConnected ? "#F0FDF4" : "#FFFBEB",
+                color: isConnected ? "#16A34A" : "#D97706",
+                border: `1px solid ${isConnected ? "#BBF7D0" : "#FDE68A"}`,
+              }}
+            >
+              <Wifi size={11} />
+              <span>{isConnected ? "WS LIVE" : "CONNECTING"}</span>
+            </div>
+
+            {driverConnected ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  padding: "3px 7px",
+                  borderRadius: "4px",
+                  background: "#ECFDF5",
+                  color: "#059669",
+                  border: "1px solid #A7F3D0",
+                }}
+              >
+                <Radio size={10} className="animate-pulse" />
+                <span>STREAMING (2s)</span>
+              </div>
+            ) : (
+              <div
+                style={{
+                  fontSize: "0.65rem",
+                  fontWeight: 600,
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  background: "#F1F5F9",
+                  color: "#64748B",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                DISCONNECTED
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Telemetry Stats Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-          <div style={{ background: "var(--surface-elevated)", border: "1px solid var(--surface-border)", padding: "7px 10px", borderRadius: "6px" }}>
-            <div style={{ fontSize: "0.65rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "4px" }}>
-              <Gauge size={11} /> Velocity
-            </div>
-            <div className="font-mono" style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--text-main)", marginTop: "2px" }}>
-              {speed} <span style={{ fontSize: "0.7rem", fontWeight: 400, color: "var(--text-dim)" }}>km/h</span>
-            </div>
-          </div>
-
-          <div style={{ background: "var(--surface-elevated)", border: "1px solid var(--surface-border)", padding: "7px 10px", borderRadius: "6px" }}>
-            <div style={{ fontSize: "0.65rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "4px" }}>
-              <Clock size={11} /> Next Stop
-            </div>
-            <div className="font-mono" style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--text-main)", marginTop: "2px" }}>
-              ~{etaMins} <span style={{ fontSize: "0.7rem", fontWeight: 400, color: "var(--text-dim)" }}>min</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Stop Info & Geofencing Status */}
-        <div style={{ background: "var(--surface-elevated)", border: "1px solid var(--surface-border)", padding: "8px 10px", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "4px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: "var(--text-muted)" }}>
-            <MapPin size={13} color="var(--text-dim)" />
-            <span>Target: <strong style={{ color: "var(--text-main)" }}>{nextStop}</strong></span>
-          </div>
-          <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", paddingLeft: "19px" }}>
-            Distance: <span className="font-mono" style={{ color: "var(--text-main)" }}>{distanceKm} km</span>
-          </div>
-
-          {/* 500m Geofence Indicator Badge */}
-          <div
-            style={{
-              marginTop: "4px",
-              padding: "4px 8px",
-              borderRadius: "4px",
-              fontSize: "0.68rem",
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              background: geofenceActive ? "#FFFBEB" : "#FFFFFF",
-              color: geofenceActive ? "#D97706" : "var(--text-dim)",
-              border: `1px solid ${geofenceActive ? "#FDE68A" : "var(--surface-border)"}`,
-            }}
-          >
-            <ShieldCheck size={12} color={geofenceActive ? "#D97706" : "var(--text-dim)"} />
-            <span>
-              {geofenceActive
-                ? `Active: ${distanceToRegStopM}m to ${registeredStopName}`
-                : `Armed (${distanceToRegStopM}m away)`}
+        {/* ================= LOCATION COORDINATES SMALL WINDOW ================= */}
+        <div
+          style={{
+            background: "#F8FAFC",
+            border: "1px solid #E2E8F0",
+            padding: "10px 12px",
+            borderRadius: "8px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "0.65rem", color: "#64748B", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.03em" }}>
+              Location Coordinates
             </span>
+            {driverConnected && currentCoord && (
+              <span style={{ fontSize: "0.65rem", color: "#16A34A", fontWeight: 700, display: "flex", alignItems: "center", gap: "4px" }}>
+                <Activity size={10} className="animate-pulse" />
+                {lastUpdateAgo === 0 ? "Just now" : `${lastUpdateAgo}s ago`}
+              </span>
+            )}
+          </div>
+
+          {/* EXACT REQUIRED LOGIC: If no device sending its location, say 'No Device is Connected' */}
+          {!driverConnected || !currentCoord ? (
+            <div style={{ padding: "4px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", margin: "2px 0 3px" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#94A3B8" }}></span>
+                <span style={{ fontSize: "0.92rem", fontWeight: 700, color: "#0F172A" }}>
+                  No Device is Connected
+                </span>
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "#64748B" }}>
+                Awaiting GPS signal from driver phone
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: "2px 0" }}>
+              <div className="font-mono" style={{ fontSize: "0.90rem", fontWeight: 700, color: "#0284C7", letterSpacing: "0.02em" }}>
+                {currentCoord.lat.toFixed(6)}° N, {currentCoord.lng.toFixed(6)}° E
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "#64748B", marginTop: "3px" }}>
+                <span>Precision: <strong style={{ color: "#16A34A" }}>±{accuracy ? Math.round(accuracy) : 4}m</strong></span>
+                <span style={{ color: "#059669", fontWeight: 600 }}>Refreshing every 2s</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Telemetry Stats Grid (White Theme) */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+          <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", padding: "7px 10px", borderRadius: "6px" }}>
+            <div style={{ fontSize: "0.65rem", color: "#64748B", display: "flex", alignItems: "center", gap: "4px" }}>
+              <Gauge size={11} /> Speed
+            </div>
+            <div className="font-mono" style={{ fontSize: "1.05rem", fontWeight: 700, color: "#0F172A", marginTop: "2px" }}>
+              {driverConnected ? speed.toFixed(1) : "—"} <span style={{ fontSize: "0.7rem", fontWeight: 400, color: "#64748B" }}>km/h</span>
+            </div>
+          </div>
+
+          <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", padding: "7px 10px", borderRadius: "6px" }}>
+            <div style={{ fontSize: "0.65rem", color: "#64748B", display: "flex", alignItems: "center", gap: "4px" }}>
+              <Layers size={11} /> Path Updates
+            </div>
+            <div className="font-mono" style={{ fontSize: "1.05rem", fontWeight: 700, color: "#0F172A", marginTop: "2px" }}>
+              {driverConnected ? trailPointsRef.current.length : 0} <span style={{ fontSize: "0.7rem", fontWeight: 400, color: "#64748B" }}>ticks</span>
+            </div>
           </div>
         </div>
 
-        {/* Driver info */}
-        <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", display: "flex", justifyContent: "space-between", paddingTop: "2px" }}>
-          <span>Driver: <span style={{ color: "var(--text-muted)" }}>{bus.driver_name}</span></span>
-          <span className="font-mono" style={{ color: "var(--text-dim)" }}>{bus.driver_phone}</span>
+        {/* Driver contact line */}
+        <div style={{ fontSize: "0.68rem", color: "#64748B", display: "flex", justifyContent: "space-between", paddingTop: "2px" }}>
+          <span>Driver: <strong style={{ color: "#334155" }}>{bus.driver_name}</strong></span>
+          <span className="font-mono" style={{ color: "#64748B" }}>{bus.driver_phone}</span>
         </div>
       </div>
     </div>

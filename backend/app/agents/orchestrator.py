@@ -43,7 +43,7 @@ async def run_agent_workflow(query: str, claims: UserSecurityClaims, history: Li
     if not is_safe:
         await log_security_event(claims, "EVENT_PRIVILEGE_PROBE", f"Adversarial jailbreak query rejected: {query[:100]}")
         return ChatResponse(
-            reply=f"🔒 **Security Violation Detected**: {refusal_reason}",
+            reply="Access to this information is forbidden.",
             sources=[],
             access_denied=True,
             audit_flag="EVENT_PRIVILEGE_PROBE"
@@ -96,5 +96,5 @@ async def run_agent_workflow(query: str, claims: UserSecurityClaims, history: Li
             state.citations.extend(res.get("citations", []))
 
     # Step 5: Synthesis & Egress Guardrail Evaluation
-    chat_response = sanitize_and_synthesize_response(state)
+    chat_response = await sanitize_and_synthesize_response(state)
     return chat_response

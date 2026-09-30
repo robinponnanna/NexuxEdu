@@ -53,7 +53,7 @@ async def seed_academic_support_data(force_reseed: bool = False):
         students_metadata = [
             {"name": "Jane Doe", "email": "student@campus.edu", "roll": "CS-2023-042", "section": "Section A"},
             {"name": "Alex Smith", "email": "alex@campus.edu", "roll": "CS-2023-088", "section": "Section A"},
-            {"name": "Maya Lin", "email": "maya.lin@campus.edu", "roll": "CS-2023-015", "section": "Section A"},
+            {"name": "Maya Lin", "email": "maya.lin@campus.edu", "roll": "CS-2023-016", "section": "Section A"},
             {"name": "Liam Chen", "email": "liam.chen@campus.edu", "roll": "CS-2023-029", "section": "Section A"},
             {"name": "Priya Sharma", "email": "priya.sharma@campus.edu", "roll": "CS-2023-054", "section": "Section A"},
             {"name": "Carlos Rodriguez", "email": "carlos.r@campus.edu", "roll": "CS-2023-061", "section": "Section B"},
@@ -64,7 +64,7 @@ async def seed_academic_support_data(force_reseed: bool = False):
         ]
 
         student_objs = []
-        for meta in students_metadata:
+        for i, meta in enumerate(students_metadata):
             u_res = await session.execute(select(User).where(User.email == meta["email"]))
             user = u_res.scalar_one_or_none()
             if not user:
@@ -81,9 +81,15 @@ async def seed_academic_support_data(force_reseed: bool = False):
             s_res = await session.execute(select(Student).where(Student.user_id == user.id))
             student = s_res.scalar_one_or_none()
             if not student:
+                target_roll = meta["roll"]
+                # Safety check against roll_number collision with existing students
+                roll_check = await session.execute(select(Student).where(Student.roll_number == target_roll))
+                if roll_check.scalar_one_or_none() is not None:
+                    target_roll = f"CS-2023-{200 + i:03d}"
+
                 student = Student(
                     user_id=user.id,
-                    roll_number=meta["roll"],
+                    roll_number=target_roll,
                     department="Computer Science",
                     semester=6,
                     section=meta["section"]

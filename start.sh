@@ -33,7 +33,7 @@ check_port() {
 clear 2>/dev/null || true
 echo -e "${CYAN}${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════════════════════╗"
-echo "  ║        OMNICAMPUS ERP & SAFETRANSIT FLEET INTELLIGENCE           ║"
+echo "  ║         NEXUSEDU ERP & SAFETRANSIT FLEET INTELLIGENCE             ║"
 echo "  ║      Multi-Agent Zero-Trust RBAC & Live Telematics Engine         ║"
 echo "  ╚═══════════════════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
@@ -119,13 +119,13 @@ fi
 # ------------------------------------------------------------------------------
 # 4. Service Launch & Process Management
 # ------------------------------------------------------------------------------
-echo -e "\n${BOLD}[4/4] Starting OmniCampus services...${RESET}"
+echo -e "\n${BOLD}[4/4] Starting NexusEdu services...${RESET}"
 
 BACKEND_PID=""
 FRONTEND_PID=""
 
 cleanup() {
-  echo -e "\n\n${YELLOW}Shutting down OmniCampus ERP services...${RESET}"
+  echo -e "\n\n${YELLOW}Shutting down NexusEdu ERP services...${RESET}"
   if [ -n "$BACKEND_PID" ]; then
     kill "$BACKEND_PID" 2>/dev/null || true
     pkill -P "$BACKEND_PID" 2>/dev/null || true
@@ -187,7 +187,7 @@ fi
 # System Ready Banner
 # ------------------------------------------------------------------------------
 echo -e "\n${GREEN}${BOLD}═══════════════════════════════════════════════════════════════════${RESET}"
-echo -e "${GREEN}${BOLD}       🚀 OmniCampus ERP & SafeTransit is LIVE!                     ${RESET}"
+echo -e "${GREEN}${BOLD}       🚀 NexusEdu ERP & SafeTransit is LIVE!                     ${RESET}"
 echo -e "${GREEN}${BOLD}═══════════════════════════════════════════════════════════════════${RESET}"
 echo -e ""
 echo -e "  ${BOLD}🖥️  Web Application:${RESET}   ${CYAN}http://localhost:3000${RESET}"

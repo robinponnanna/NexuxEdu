@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NexusEdu Transit Telemetry Cockpit</title>
+  <meta name="theme-color" content="#090D16">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #F8FAFC;
+      color: #0F172A;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      padding-top: max(16px, env(safe-area-inset-top));
+      padding-bottom: max(24px, env(safe-area-inset-bottom));
+    }
+
+    .container {
+      max-width: 480px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .card {
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .badge-online {
+      background: #F0FDF4;
+      border: 1px solid #BBF7D0;
+      color: #16A34A;
+    }
+
+    .badge-offline {
+      background: #FEF2F2;
+      border: 1px solid #FECACA;
+      color: #DC2626;
+    }
+
+    .badge-warning {
+      background: #FFFBEB;
+      border: 1px solid #FDE68A;
+      color: #D97706;
+    }
+
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #16A34A;
+      box-shadow: 0 0 10px #16A34A;
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.35;
+        transform: scale(1.25);
+      }
+    }
+
+    /* Primary Action Button */
+    .btn-main {
+      width: 100%;
+      padding: 16px 20px;
+      border-radius: 14px;
+      border: none;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      color: #FFFFFF;
+      background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+      letter-spacing: 0.02em;
+    }
+
+    .btn-main:active {
+      transform: scale(0.98);
+    }
+
+    .btn-main.tracking {
+      background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.25);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .stat-box {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-label {
+      font-size: 0.68rem;
+      color: #64748B;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 1.15rem;
+      font-weight: 700;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #0284C7;
+    }
+
+    .speed-gauge {
+      text-align: center;
+      padding: 16px;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    .speed-number {
+      font-size: 3rem;
+      font-weight: 800;
+      color: #0F172A;
+      font-family: ui-monospace, monospace;
+      line-height: 1;
+    }
+
+    .speed-unit {
+      font-size: 0.8rem;
+      color: #64748B;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .alert-box {
+      background: #FEF2F2;
+      border: 1px solid #FECACA;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 0.82rem;
+      color: #DC2626;
+      line-height: 1.4;
+      display: none;
+    }
+
+    .wake-lock-pill {
+      font-size: 0.72rem;
+      color: #64748B;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <!-- Main Card containing the 5 requested fields -->
+    <div class="card" style="display: flex; flex-direction: column; gap: 16px;">
+      <!-- 1. BUS ID -->
+      <div style="text-align: center; border-bottom: 1px solid #F1F5F9; padding-bottom: 14px;">
+        <div
+          style="font-size: 0.75rem; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
+          Bus ID</div>
+        <h1 id="busNumber" style="font-size: 1.6rem; color: #0F172A; font-weight: 800; margin-top: 2px;">Loading...</h1>
+      </div>
+
+      <!-- 2. Speed in which the bus is moving -->
+      <div class="speed-gauge">
+        <div class="stat-label">Speed</div>
+        <div class="speed-number" id="speedVal">0.0</div>
+        <div class="speed-unit">KM / H</div>
+      </div>
+
+      <!-- 3 & 4. Latitude & Longitude -->
+      <div class="grid-2">
+        <div class="stat-box">
+          <div class="stat-label">Latitude</div>
+          <div class="stat-value" id="latVal">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Longitude</div>
+          <div class="stat-value" id="lngVal">—</div>
+        </div>
+      </div>
+
+      <!-- 5. GPS Precision -->
+      <div class="stat-box" style="text-align: center; align-items: center;">
+        <div class="stat-label">GPS Precision</div>
+        <div class="stat-value" id="accVal" style="color: #16A34A; font-size: 1.25rem;">—</div>
+      </div>
+    </div>
+
+    <!-- Alert / Notice Box -->
+    <div id="alertBox" class="alert-box"></div>
+
+    <!-- Start / Stop Tracking Button -->
+    <button id="toggleTrackingBtn" class="btn-main">
+      <span>SHOW DETAILS</span>
+    </button>
+  </div>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+
+      const alertBox = document.getElementById('alertBox');
+      const toggleBtn = document.getElementById('toggleTrackingBtn');
+      const busNumberEl = document.getElementById('busNumber');
+      const speedValEl = document.getElementById('speedVal');
+      const latValEl = document.getElementById('latVal');
+      const lngValEl = document.getElementById('lngVal');
+      const accValEl = document.getElementById('accVal');
+
+      if (!token) {
+        document.body.innerHTML = `
+          <div style="color: #DC2626; padding: 40px 20px; text-align: center; max-width: 440px;">
+            <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;">Missing Tracking Token</h2>
+            <p style="color: #64748B; font-size: 0.9rem;">Please access this driver cockpit via an authorized dispatch link or scan the QR code from the Admin ERP dashboard.</p>
+          </div>
+        `;
+        return;
+      }
+
+      let socket = null;
+      let watchId = null;
+      let lastSendTime = 0;
+      let isTracking = false;
+      let wakeLock = null;
+      const MIN_INTERVAL_MS = 2000;
+
+      // 1. Fetch metadata & validate token
+      fetch('/api/tracking/sessions/validate?token=' + encodeURIComponent(token))
+        .then(r => {
+          if (!r.ok) throw new Error('Tracking session is invalid or has expired.');
+          return r.json();
+        })
+        .then(data => {
+          if (busNumberEl) busNumberEl.innerText = data.busNumber || ('BUS-' + data.busId);
+
+          if (data.latestLatitude && data.latestLongitude) {
+            if (latValEl) latValEl.innerText = parseFloat(data.latestLatitude).toFixed(6);
+            if (lngValEl) lngValEl.innerText = parseFloat(data.latestLongitude).toFixed(6);
+          }
+
+          connectWebSocket();
+        })
+        .catch(err => {
+          showAlert('Session Expired: ' + err.message + ' Please ask campus administration to generate a fresh link.');
+        });
+
+      function showAlert(msg) {
+        if (alertBox) {
+          alertBox.style.display = 'block';
+          alertBox.innerHTML = msg;
+        }
+      }
+
+      function hideAlert() {
+        if (alertBox) {
+          alertBox.style.display = 'none';
+        }
+      }
+
+      // 2. Connect to WebSocket
+      function connectWebSocket() {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        let host = window.location.host;
+        const wsUrl = proto + '//' + host + '/ws?token=' + encodeURIComponent(token);
+
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+          console.log('Driver telemetry WebSocket connected.');
+        };
+
+        socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'location_ack') {
+              // Location acknowledged
+            }
+          } catch (e) { }
+        };
+
+        socket.onclose = () => {
+          setTimeout(connectWebSocket, 3000);
+        };
+
+        socket.onerror = () => { };
+      }
+
+      // 3. Screen Wake Lock API
+      async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+          try {
+            wakeLock = await navigator.wakeLock.request('screen');
+          } catch (err) {
+            console.warn('Wake Lock request failed:', err);
+          }
+        }
+      }
+
+      function releaseWakeLock() {
+        if (wakeLock) {
+          wakeLock.release().catch(() => { });
+          wakeLock = null;
+        }
+      }
+
+      // 4. Send Location Packet
+      function sendLocationPacket(lat, lng, acc, speedKmh, heading) {
+        const now = Date.now();
+        if (now - lastSendTime < MIN_INTERVAL_MS) return;
+        lastSendTime = now;
+
+        const payload = {
+          type: 'location',
+          latitude: parseFloat(lat.toFixed(6)),
+          longitude: parseFloat(lng.toFixed(6)),
+          accuracy: parseFloat(acc.toFixed(1)),
+          speed_kmh: parseFloat((speedKmh || 0).toFixed(1)),
+          heading: parseFloat((heading || 0).toFixed(1)),
+          timestamp: now
+        };
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify(payload));
+        }
+
+        if (latValEl) latValEl.innerText = payload.latitude.toFixed(6);
+        if (lngValEl) lngValEl.innerText = payload.longitude.toFixed(6);
+        if (accValEl) accValEl.innerText = '±' + Math.round(acc) + 'm';
+        if (speedValEl) speedValEl.innerText = (payload.speed_kmh || 0).toFixed(1);
+      }
+
+      // 5. Start / Stop GPS Tracking
+      function startGpsTracking() {
+        if (!navigator.geolocation) {
+          showAlert('Geolocation is not supported by your mobile browser. Please use Google Chrome, Apple Safari, or Mozilla Firefox.');
+          return;
+        }
+
+        hideAlert();
+        requestWakeLock();
+
+        const geoOptions = {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 10000
+        };
+
+        let lastCoords = null;
+        let gpsPollInterval = null;
+
+        watchId = navigator.geolocation.watchPosition(
+          pos => {
+            hideAlert();
+            const speedKmh = pos.coords.speed !== null && pos.coords.speed !== undefined
+              ? pos.coords.speed * 3.6
+              : 0;
+            lastCoords = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              acc: pos.coords.accuracy,
+              speedKmh: speedKmh,
+              heading: pos.coords.heading
+            };
+            sendLocationPacket(
+              pos.coords.latitude,
+              pos.coords.longitude,
+              pos.coords.accuracy,
+              speedKmh,
+              pos.coords.heading
+            );
+          },
+          err => {
+            if (err.code === 1) {
+              showAlert('⚠️ <strong>Location Permission Denied</strong>. Please grant location access in your device/browser settings so this device can be tracked.');
+            } else if (err.code === 2) {
+              showAlert('⚠️ <strong>GPS Position Unavailable</strong>. Ensure your device has Location/GPS turned on and has a clear view of the sky.');
+            } else if (err.code === 3) {
+              showAlert('⚠️ <strong>GPS Signal Timed Out</strong>. Retrying satellite acquisition...');
+            } else {
+              showAlert('GPS Error: ' + err.message);
+            }
+          },
+          geoOptions
+        );
+
+        // 2-second periodic fallback to ensure 2s continuous refresh even if stationary
+        gpsPollInterval = setInterval(() => {
+          if (!isTracking) return;
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              pos => {
+                const speedKmh = pos.coords.speed !== null && pos.coords.speed !== undefined
+                  ? pos.coords.speed * 3.6
+                  : 0;
+                lastCoords = {
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude,
+                  acc: pos.coords.accuracy,
+                  speedKmh: speedKmh,
+                  heading: pos.coords.heading
+                };
+                sendLocationPacket(
+                  pos.coords.latitude,
+                  pos.coords.longitude,
+                  pos.coords.accuracy,
+                  speedKmh,
+                  pos.coords.heading
+                );
+              },
+              () => {
+                if (lastCoords && Date.now() - lastSendTime >= MIN_INTERVAL_MS) {
+                  sendLocationPacket(
+                    lastCoords.lat,
+                    lastCoords.lng,
+                    lastCoords.acc,
+                    lastCoords.speedKmh,
+                    lastCoords.heading
+                  );
+                }
+              },
+              { enableHighAccuracy: true, maximumAge: 1500, timeout: 1800 }
+            );
+          } else if (lastCoords && Date.now() - lastSendTime >= MIN_INTERVAL_MS) {
+            sendLocationPacket(
+              lastCoords.lat,
+              lastCoords.lng,
+              lastCoords.acc,
+              lastCoords.speedKmh,
+              lastCoords.heading
+            );
+          }
+        }, MIN_INTERVAL_MS);
+
+        isTracking = true;
+        toggleBtn.innerHTML = '<span>HIDE DETAILS</span>';
+        toggleBtn.className = 'btn-main tracking';
+      }
+
+      function stopGpsTracking() {
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+        }
+        if (gpsPollInterval !== null) {
+          clearInterval(gpsPollInterval);
+          gpsPollInterval = null;
+        }
+        releaseWakeLock();
+        isTracking = false;
+        toggleBtn.innerHTML = '<span>📍 START LIVE GPS TRACKING</span>';
+        toggleBtn.className = 'btn-main';
+      }
+
+      toggleBtn.onclick = () => {
+        if (isTracking) {
+          stopGpsTracking();
+        } else {
+          startGpsTracking();
+        }
+      };
+
+      // Keepalive ping every 20 seconds
+      setInterval(() => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 20000);
+    })();
+  </script>
+</body>
+
+</html>

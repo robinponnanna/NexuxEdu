@@ -8,12 +8,12 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_DB_PATH = (BACKEND_DIR / "campus.db").as_posix()
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "OmniCampus ERP & SafeTransit"
+    PROJECT_NAME: str = "NexusEdu ERP & SafeTransit"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
     # Security
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "omnicampus-super-secret-jwt-key-2026-secure-hackathon")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "nexusedu-super-secret-jwt-key-2026-secure-hackathon")
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 # 24 hours
     
@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # Telemetry
     TELEMETRY_INTERVAL_SECONDS: float = 3.0
     GEOFENCE_RADIUS_METERS: float = 500.0
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "http://localhost:3000")
 
     class Config:
         case_sensitive = True

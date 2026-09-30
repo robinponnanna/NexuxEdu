@@ -71,6 +71,7 @@ export default function LoginPage() {
       const session: AuthSession = await login(loginEmail, password);
       // Persist session in localStorage for automatic role recognition
       if (typeof window !== "undefined") {
+        localStorage.setItem("nexusedu_session", JSON.stringify(session));
         localStorage.setItem("omnicampus_session", JSON.stringify(session));
       }
       // Navigate to dashboard where role and rights are automatically applied
@@ -131,7 +132,7 @@ export default function LoginPage() {
           </div>
 
           <h1 style={{ fontSize: "1.45rem", fontWeight: 700, color: "var(--text-main)", letterSpacing: "-0.02em" }}>
-            OmniCampus <span style={{ color: "var(--color-primary)", fontWeight: 600 }}>ERP</span>
+            NexusEdu <span style={{ color: "var(--color-primary)", fontWeight: 600 }}>ERP</span>
           </h1>
           <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginTop: "4px" }}>
             Role-Based Academic Governance & SafeTransit

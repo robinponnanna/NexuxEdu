@@ -44,13 +44,14 @@ export interface BusDetails {
   route_name: string;
   driver_name: string;
   driver_phone: string;
-  current_lat: number;
-  current_lng: number;
-  speed_kmh: number;
-  status: string;
+  current_lat?: number;
+  current_lng?: number;
+  speed_kmh?: number;
+  status?: string;
+  driver_connected?: boolean;
   last_updated?: string;
-  stops: BusStop[];
-  waypoints: [number, number][];
+  stops?: BusStop[];
+  waypoints?: [number, number][];
 }
 
 // Dynamically resolves API Base URL (proxied through Next.js /api/v1 or direct to port 8000)
@@ -135,10 +136,67 @@ export async function getAuditLogs(token: string) {
 export function getTransitWebSocketUrl(busId: number, token: string) {
   if (typeof window !== "undefined") {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.hostname;
-    return `${proto}//${host}:8000/ws/transit/${busId}?token=${encodeURIComponent(token)}`;
+    let hostPart = window.location.host;
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      hostPart = `${window.location.hostname}:8000`;
+    }
+    return `${proto}//${hostPart}/ws/transit/${busId}?token=${encodeURIComponent(token)}`;
   }
   return `ws://127.0.0.1:8000/ws/transit/${busId}?token=${encodeURIComponent(token)}`;
+}
+
+export function getUnifiedWebSocketUrl(token: string): string {
+  if (typeof window !== "undefined") {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    let hostPart = window.location.host;
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      hostPart = `${window.location.hostname}:8000`;
+    }
+    return `${proto}//${hostPart}/ws?token=${encodeURIComponent(token)}`;
+  }
+  return `ws://127.0.0.1:8000/ws?token=${encodeURIComponent(token)}`;
+}
+
+export interface CreateTrackingSessionResponse {
+  token: string;
+  trackingUrl: string;
+  publicUrl?: string;
+  lanUrl?: string;
+  localUrl?: string;
+  expiresAt: string;
+  busId: number;
+  busNumber?: string;
+  routeName?: string;
+}
+
+export async function createTrackingSession(
+  token: string,
+  busId: number,
+  ttlMinutes: number = 1440
+): Promise<CreateTrackingSessionResponse> {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/tracking/sessions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ busId, ttlMinutes }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to create tracking session link");
+  }
+  return res.json();
+}
+
+export async function getUserAssignedBuses(token: string): Promise<{ role: string; busIds: number[] }> {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/tracking/user-assigned-buses`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch assigned buses");
+  return res.json();
 }
 
 export interface FacultyStudentAttendance {

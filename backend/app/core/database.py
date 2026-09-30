@@ -25,8 +25,8 @@ class Bus(Base):
     route_name: Mapped[str] = mapped_column(String(100), nullable=False)
     driver_name: Mapped[str] = mapped_column(String(100), nullable=False)
     driver_phone: Mapped[str] = mapped_column(String(20), nullable=False)
-    current_lat: Mapped[float] = mapped_column(Float, default=28.613939)
-    current_lng: Mapped[float] = mapped_column(Float, default=77.209021)
+    current_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=None)
+    current_lng: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=None)
     speed_kmh: Mapped[float] = mapped_column(Float, default=0.0)
     status: Mapped[str] = mapped_column(String(30), default="Active") # 'Active', 'Congested', 'Depot'
     stops_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # JSON list of stops
@@ -87,6 +87,27 @@ class AuditLog(Base):
     event_type: Mapped[str] = mapped_column(String(60), nullable=False) # e.g. 'EVENT_PRIVILEGE_PROBE', 'UNAUTHORIZED_QUERY'
     details: Mapped[str] = mapped_column(Text, nullable=False)
     timestamp: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+
+class TrackingSession(Base):
+    __tablename__ = "tracking_sessions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    bus_id: Mapped[int] = mapped_column(Integer, ForeignKey("buses.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    active: Mapped[bool] = mapped_column(Integer, default=1, nullable=False)  # SQLite compatible boolean (0/1)
+    latest_latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    latest_longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    latest_accuracy: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    latest_timestamp: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+class BusAssignment(Base):
+    __tablename__ = "bus_assignments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    bus_id: Mapped[int] = mapped_column(Integer, ForeignKey("buses.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    active: Mapped[bool] = mapped_column(Integer, default=1, nullable=False)  # SQLite compatible boolean (0/1)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
 # --- Academic Support & Learning Management Models ---
 
