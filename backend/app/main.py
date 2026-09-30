@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.services.seed_data import seed_database_if_empty
 from app.services.seed_academic_data import seed_academic_support_data
+from app.services.seed_clash_data import seed_clash_scenario
 from app.services.transit_simulator import transit_simulator
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
@@ -13,6 +14,7 @@ from app.api.transit import router as transit_router, handle_transit_websocket
 from app.api.erp import router as erp_router
 from app.api.student_academic import router as student_academic_router
 from app.api.tracking import router as tracking_router, handle_unified_websocket
+from app.api.clash import router as clash_router, handle_notifications_websocket
 from fastapi import WebSocket, Query
 from fastapi.responses import HTMLResponse
 from typing import Optional
@@ -24,6 +26,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     await seed_database_if_empty()
     await seed_academic_support_data()
+    await seed_clash_scenario()
     # Start live transit telemetry simulator
     await transit_simulator.start()
     yield
@@ -66,6 +69,8 @@ app.include_router(student_academic_router, prefix=settings.API_V1_STR)
 # Mount Tracking Router under both /api and /api/v1 for universal routing
 app.include_router(tracking_router, prefix="/api")
 app.include_router(tracking_router, prefix=settings.API_V1_STR)
+# Mount Clash & Grievance Router
+app.include_router(clash_router, prefix=settings.API_V1_STR)
 
 # Top-level unified WebSocket endpoint at /ws?token=...
 @app.websocket("/ws")
@@ -76,6 +81,11 @@ async def ws_unified_endpoint(websocket: WebSocket, token: Optional[str] = Query
 @app.websocket("/ws/transit/{bus_id}")
 async def ws_transit_alias(websocket: WebSocket, bus_id: int, token: Optional[str] = Query(None)):
     await handle_transit_websocket(websocket, bus_id, token)
+
+# Top-level WebSocket alias for notifications: /ws/notifications
+@app.websocket("/ws/notifications")
+async def ws_notifications_alias(websocket: WebSocket, token: Optional[str] = Query(None), as_admin: bool = Query(False)):
+    await handle_notifications_websocket(websocket, token, as_admin)
 
 # Standalone driver tracking page served directly on backend port
 @app.get("/track", response_class=HTMLResponse)

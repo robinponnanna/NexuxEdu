@@ -9,3 +9,5 @@ campus.db.bak
 backend/campus.db
 backend/campus.db.bak
 campus.db
+backend/media/audio/
+backend/media/temp/

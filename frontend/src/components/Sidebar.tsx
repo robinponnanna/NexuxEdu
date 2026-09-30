@@ -2,9 +2,19 @@
 
 import React from "react";
 import { UserProfile } from "@/lib/api";
-import { LayoutDashboard, Bus, UserCheck, ShieldAlert, GraduationCap } from "lucide-react";
+import { LayoutDashboard, Bus, UserCheck, ShieldAlert, GraduationCap, Calendar, Clock, AlertCircle } from "lucide-react";
 
-export type NavTab = "dashboard" | "academics" | "transit" | "attendance" | "policies" | "audits";
+export type NavTab =
+  | "dashboard"
+  | "academics"
+  | "events"
+  | "reschedule"
+  | "clashes"
+  | "hod_dashboard"
+  | "transit"
+  | "attendance"
+  | "policies"
+  | "audits";
 
 interface SidebarProps {
   user: UserProfile | null;
@@ -15,10 +25,15 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ user, activeTab, onSelectTab }) => {
   const role = user?.role || "student";
+  const isHOD = !!user?.is_hod;
 
   const navItems: { id: NavTab; label: string; icon: React.ComponentType<{ size: number; color?: string }>; visible: boolean }[] = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, visible: true },
     { id: "academics", label: "Academic Support", icon: GraduationCap, visible: role === "student" || role === "parent" },
+    { id: "events", label: "Event Clashes", icon: Calendar, visible: role === "admin" },
+    { id: "reschedule", label: "Retake Requests", icon: Clock, visible: role === "faculty" },
+    { id: "hod_dashboard", label: "HOD Governance", icon: AlertCircle, visible: role === "faculty" && isHOD },
+    { id: "clashes", label: "My Clashes", icon: AlertCircle, visible: role === "student" },
     { id: "transit", label: "Live Transit", icon: Bus, visible: role === "student" || role === "parent" || role === "admin" },
     { id: "attendance", label: role === "faculty" ? "Class Roster" : "Attendance Tracker", icon: UserCheck, visible: true },
     { id: "audits", label: "Security Audits", icon: ShieldAlert, visible: role === "admin" },

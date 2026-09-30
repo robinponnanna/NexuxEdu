@@ -8,6 +8,10 @@ import { Sidebar, NavTab } from "@/components/Sidebar";
 import { AttendanceCard, SubjectAttendance } from "@/components/AttendanceCard";
 import { ChatDrawer } from "@/components/ChatDrawer";
 import { AcademicSupportContainer } from "@/components/academic/AcademicSupportContainer";
+import { AdminEventManagement } from "@/components/AdminEventManagement";
+import { ProfessorReschedule } from "@/components/ProfessorReschedule";
+import { StudentClashes } from "@/components/StudentClashes";
+import { HODDashboard } from "@/components/HODDashboard";
 import {
   login,
   getDashboard,
@@ -2057,6 +2061,26 @@ export default function HomePage() {
                 </table>
               </div>
             </div>
+          )}
+
+          {/* ===================== TAB: EVENT CLASHES (ADMIN ONLY) ===================== */}
+          {activeTab === "events" && token && user?.role === "admin" && (
+            <AdminEventManagement token={token} />
+          )}
+
+          {/* ===================== TAB: RETAKE REQUESTS (FACULTY ONLY) ===================== */}
+          {activeTab === "reschedule" && token && user?.role === "faculty" && (
+            <ProfessorReschedule token={token} />
+          )}
+
+          {/* ===================== TAB: MY CLASHES (STUDENT ONLY) ===================== */}
+          {activeTab === "clashes" && token && user?.role === "student" && (
+            <StudentClashes token={token} />
+          )}
+
+          {/* ===================== TAB: HOD DASHBOARD (HOD FACULTY ONLY) ===================== */}
+          {activeTab === "hod_dashboard" && token && user?.role === "faculty" && user?.is_hod && (
+            <HODDashboard token={token} />
           )}
         </main>
       </div>

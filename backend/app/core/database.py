@@ -1,9 +1,10 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, Float, Text, ForeignKey, DateTime, func, JSON, Boolean, text
+from sqlalchemy import Integer, String, Float, Text, ForeignKey, DateTime, func, JSON, Boolean, text, UniqueConstraint, Index
 from typing import Optional, List
 import datetime
 from app.core.config import settings
+from app.core.datetime_utils import utcnow
 
 class Base(DeclarativeBase):
     pass
@@ -146,19 +147,133 @@ class SubjectModule(Base):
     learning_materials: Mapped[List["LearningMaterial"]] = relationship("LearningMaterial", back_populates="module")
     micro_lessons: Mapped[List["MicroLesson"]] = relationship("MicroLesson", back_populates="module")
 
+class Event(Base):
+    __tablename__ = "events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    start_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    end_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    created_by: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=utcnow)
+
+    participants = relationship("EventParticipant", back_populates="event", cascade="all, delete-orphan")
+    clash_cases = relationship("ClashCase", back_populates="event", cascade="all, delete-orphan")
+
+class EventParticipant(Base):
+    __tablename__ = "event_participants"
+    __table_args__ = (
+        UniqueConstraint("event_id", "student_id", name="uq_event_student"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    event_id: Mapped[int] = mapped_column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
+    student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
+
+    event = relationship("Event", back_populates="participants")
+    student = relationship("Student")
+
+class CourseOffering(Base):
+    __tablename__ = "course_offerings"
+    __table_args__ = (
+        UniqueConstraint("course_code", "section", "semester", name="uq_offering_section_sem"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    course_code: Mapped[str] = mapped_column(String(30), nullable=False)
+    subject: Mapped[str] = mapped_column(String(100), nullable=False)
+    section: Mapped[str] = mapped_column(String(20), nullable=False)
+    semester: Mapped[int] = mapped_column(Integer, nullable=False)
+    department: Mapped[str] = mapped_column(String(60), nullable=False)
+    faculty_id: Mapped[int] = mapped_column(Integer, ForeignKey("faculty.id", ondelete="CASCADE"), nullable=False)
+
+    faculty = relationship("Faculty")
+    assessments = relationship("Assessment", back_populates="offering", cascade="all, delete-orphan")
+
 class Assessment(Base):
     __tablename__ = "assessments"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    subject_id: Mapped[int] = mapped_column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
-    category: Mapped[str] = mapped_column(String(30), nullable=False) # 'CA1', 'CA2', 'CA3', 'Midterm', 'Endterm'
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    max_marks: Mapped[float] = mapped_column(Float, nullable=False)
-    weightage_pct: Mapped[float] = mapped_column(Float, default=10.0, nullable=False)
+    
+    # Clash & timetable scheduling fields
+    offering_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("course_offerings.id", ondelete="CASCADE"), nullable=True)
+    kind: Mapped[Optional[str]] = mapped_column(String(50), nullable=True) # e.g. "midterm", "lab_midterm", "class_test"
+    start_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    end_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    venue: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Academic support & grading fields
+    subject_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=True, index=True)
+    category: Mapped[Optional[str]] = mapped_column(String(30), nullable=True) # 'CA1', 'CA2', 'CA3', 'Midterm', 'Endterm'
+    name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    max_marks: Mapped[Optional[float]] = mapped_column(Float, default=100.0, nullable=True)
+    weightage_pct: Mapped[Optional[float]] = mapped_column(Float, default=10.0, nullable=True)
     assessment_date: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
 
     # Relationships
-    subject: Mapped["Subject"] = relationship("Subject", back_populates="assessments")
+    offering = relationship("CourseOffering", back_populates="assessments")
+    subject: Mapped[Optional["Subject"]] = relationship("Subject", back_populates="assessments")
     questions: Mapped[List["AssessmentQuestion"]] = relationship("AssessmentQuestion", back_populates="assessment", cascade="all, delete-orphan")
+
+class ClashCase(Base):
+    __tablename__ = "clash_cases"
+    __table_args__ = (
+        UniqueConstraint("event_id", "student_id", "assessment_id", name="uq_case_event_student_assessment"),
+        Index("ix_clash_cases_status", "status"),
+        Index("ix_clash_cases_student_id", "student_id"),
+        Index("ix_clash_cases_assessment_id", "assessment_id"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    event_id: Mapped[int] = mapped_column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
+    student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
+    assessment_id: Mapped[int] = mapped_column(Integer, ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="DETECTED")
+    
+    suggested_retake_assessment_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("assessments.id", ondelete="SET NULL"), nullable=True)
+    retake_assessment_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("assessments.id", ondelete="SET NULL"), nullable=True)
+    retake_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    retake_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    filed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    filed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    decided_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    decided_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    event = relationship("Event", back_populates="clash_cases")
+    student = relationship("Student")
+    assessment = relationship("Assessment", foreign_keys=[assessment_id])
+    suggested_retake = relationship("Assessment", foreign_keys=[suggested_retake_assessment_id])
+    retake_assessment = relationship("Assessment", foreign_keys=[retake_assessment_id])
+    timeline = relationship("CaseTimeline", back_populates="clash_case", cascade="all, delete-orphan", order_by="CaseTimeline.at.asc()")
+
+class CaseTimeline(Base):
+    __tablename__ = "case_timelines"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    case_id: Mapped[int] = mapped_column(Integer, ForeignKey("clash_cases.id", ondelete="CASCADE"), nullable=False)
+    actor_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    actor_role: Mapped[str] = mapped_column(String(30), nullable=False) # "admin", "faculty", "student", "SYSTEM"
+    from_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    to_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    at: Mapped[datetime.datetime] = mapped_column(DateTime, default=utcnow)
+
+    clash_case = relationship("ClashCase", back_populates="timeline")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notifications_user_unread", "user_id", "is_read"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    type: Mapped[str] = mapped_column(String(50), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    case_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("clash_cases.id", ondelete="SET NULL"), nullable=True)
+    event_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("events.id", ondelete="SET NULL"), nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=utcnow)
 
 class AssessmentQuestion(Base):
     __tablename__ = "assessment_questions"
@@ -292,6 +407,19 @@ async def init_db():
             col_name = col_def.split()[0]
             try:
                 await conn.execute(text(f"ALTER TABLE micro_lessons ADD COLUMN {col_def};"))
+            except Exception:
+                pass
+
+        # Safe column addition for assessments if table was created without clash scheduling columns
+        for col_def in [
+            "offering_id INTEGER",
+            "kind VARCHAR(50)",
+            "start_at DATETIME",
+            "end_at DATETIME",
+            "venue VARCHAR(100)"
+        ]:
+            try:
+                await conn.execute(text(f"ALTER TABLE assessments ADD COLUMN {col_def};"))
             except Exception:
                 pass
 

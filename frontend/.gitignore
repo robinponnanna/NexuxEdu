@@ -43,3 +43,7 @@ next-env.d.ts
 
 # python virtual environment
 .venv
+
+
+# Pycache
+backend/app/core/__pycache__/*

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { UserProfile } from "@/lib/api";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -28,7 +28,33 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ user, token, onLogout }) => {
   const router = useRouter();
-  const [isHovered, setIsHovered] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isTriggerHovered, setIsTriggerHovered] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
 
   const getRoleBadgeClass = (role?: string) => {
     switch (role) {
@@ -61,6 +87,7 @@ export const Header: React.FC<HeaderProps> = ({ user, token, onLogout }) => {
   };
 
   const handleSignOut = () => {
+    setIsOpen(false);
     if (onLogout) {
       onLogout();
     } else {
@@ -121,21 +148,33 @@ export const Header: React.FC<HeaderProps> = ({ user, token, onLogout }) => {
         </div>
       </div>
 
-      {/* Top Right Profile Section with Hover Role Display */}
+      {/* Top Right Profile Section with Click-Activated Role Display */}
       <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
         {token && <NotificationBell token={token} />}
 
         {user && (
           <div
             id="user-profile-container"
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
+            ref={dropdownRef}
             style={{
               position: "relative",
             }}
           >
-            {/* Clickable/Hoverable Trigger */}
+            {/* Clickable Trigger */}
             <div
+              role="button"
+              tabIndex={0}
+              aria-haspopup="true"
+              aria-expanded={isOpen}
+              onClick={() => setIsOpen((prev) => !prev)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setIsOpen((prev) => !prev);
+                }
+              }}
+              onMouseEnter={() => setIsTriggerHovered(true)}
+              onMouseLeave={() => setIsTriggerHovered(false)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -144,9 +183,10 @@ export const Header: React.FC<HeaderProps> = ({ user, token, onLogout }) => {
                 padding: "6px 12px",
                 borderRadius: "8px",
                 border: "1px solid",
-                borderColor: isHovered ? "var(--surface-border-focus)" : "transparent",
-                background: isHovered ? "var(--surface-elevated)" : "transparent",
+                borderColor: isOpen || isTriggerHovered ? "var(--surface-border-focus)" : "transparent",
+                background: isOpen || isTriggerHovered ? "var(--surface-elevated)" : "transparent",
                 transition: "all 0.2s ease",
+                userSelect: "none",
               }}
             >
               {/* Profile Icon */}
@@ -187,7 +227,7 @@ export const Header: React.FC<HeaderProps> = ({ user, token, onLogout }) => {
                     size={13}
                     color="var(--text-dim)"
                     style={{
-                      transform: isHovered ? "rotate(180deg)" : "rotate(0deg)",
+                      transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
                       transition: "transform 0.2s ease",
                     }}
                   />
@@ -198,8 +238,8 @@ export const Header: React.FC<HeaderProps> = ({ user, token, onLogout }) => {
               </div>
             </div>
 
-            {/* Hover Tooltip / Floating Profile Card */}
-            {isHovered && (
+            {/* Click-Activated Floating Profile Card */}
+            {isOpen && (
               <div
                 id="role-hover-card"
                 style={{
@@ -323,7 +363,10 @@ export const Header: React.FC<HeaderProps> = ({ user, token, onLogout }) => {
 
                   <button
                     type="button"
-                    onClick={() => router.push("/login")}
+                    onClick={() => {
+                      setIsOpen(false);
+                      router.push("/login");
+                    }}
                     style={{
                       flex: 1,
                       background: "var(--surface-elevated)",

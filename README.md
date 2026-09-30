@@ -1,19 +1,87 @@
 # NexusEdu ERP & SafeTransit Fleet Intelligence Engine
 
-> **Multi-Agent RBAC-Grounded Campus ERP, Telematics Visualizer & Academic Intelligence System**
+> **Enterprise-Grade Multi-Agent RBAC Campus ERP, Event–Exam Clash Rescheduling Engine, AI Academic Support, & Real-Time Telematics Visualizer**
+
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![Next.js 14](https://img.shields.io/badge/Next.js-14%20App%20Router-black.svg)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178C6.svg)](https://www.typescriptlang.org/)
+[![Leaflet](https://img.shields.io/badge/Leaflet-OpenStreetMap-199900.svg)](https://leafletjs.com/)
+[![Zero--Trust RBAC](https://img.shields.io/badge/Security-Zero--Trust%20RBAC-crimson.svg)](#-zero-trust-multi-agent-fabric)
 
 ---
 
-## 📌 Main Objective
+## 📌 Executive Overview
 
-**NexusEdu ERP & SafeTransit** is an enterprise-grade academic management and vehicular fleet tracking platform designed around a **Zero-Trust Multi-Agent Architecture**.
+**NexusEdu ERP & SafeTransit** is a modern, full-stack campus management and fleet intelligence platform engineered around a **Zero-Trust Multi-Agent Architecture**.
 
-Traditional ERP and conversational AI systems often suffer from privilege escalation, prompt injection vulnerabilities, and lateral data exposure when users query relational or vector databases. NexusEdu solves this with:
+Unlike traditional monoliths or naive AI chat systems that expose database connections to prompt injection and lateral snooping, NexusEdu enforces cryptographic, role-bound boundaries at every layer — from transactional parametric SQL and pre-filtered vector RAG to driver telematics streaming, automated exam clash resolution, and grounded micro-learning generation.
 
-1. **Role-Bound Multi-Agent Fabric**: Specialized worker agents (Structured Records, Filtered Vector RAG, Transit Telematics) execute in sandboxed contexts strictly bounded by cryptographically signed JWT session claims (`user_id`, `role`, `department`, `student_id`, `ward_id`, `bus_id`).
-2. **SafeTransit Telematics & Geofencing**: Live bus fleet tracking rendered on **Standard OpenStreetMap** cartography with 3-second WebSocket coordinate updates, geofence perimeter monitoring, and proximity alerts (500m radius) for students and parents.
-3. **Faculty Class & Section Attendance Command Center**: Dedicated interface for professors to monitor and filter attendance across courses (`Operating Systems`, `DBMS`, `Computer Networks`) and sections (`Section A`, `Section B`), with automated enforcement of **Academic Code §4.2** examination debarment thresholds ($\ge 75\%$).
-4. **Automated RBAC Session Governance**: Seamless authentication where the system automatically discovers the user's role upon login, renders role-tailored dashboards and navigation tabs, and displays verified security credentials on profile hover.
+---
+
+## 🌟 Core System Pillars & Features
+
+### 1. 🛡️ Zero-Trust Multi-Agent AI Fabric
+* **Cryptographic Session Scoping**: Specialized worker agents operate inside sandboxes restricted by cryptographically verified JWT session claims (`user_id`, `role`, `department`, `student_id`, `ward_id`, `bus_id`).
+* **Ingress Guardrail & Anti-Jailbreak Protection**: Detects adversarial injection payloads (`"ignore prior rules"`, `"act as root"`, `"dan mode"`) before language models are invoked.
+* **Parametric Text-to-SQL (Structured Records)**: Queries never execute raw LLM-generated SQL text. Requests map to pre-compiled parameterized queries strictly bound to session claims, making horizontal snooping mathematically impossible.
+* **Filtered Vector Knowledge (RAG)**: Document vector similarity searches enforce database-level pre-filtering (`allowed_roles @> ARRAY[user_role]`). Students cannot access faculty memos, payroll data, or confidential exam rubrics.
+* **Egress Guard & Grounding Scrubber**: Formulates responses strictly with verified citations. If zero context is found, it cleanly refuses without hallucinating. Outbound text is scrubbed for cross-role entity leaks or salary figures.
+* **Audit Trail**: Flags and logs unauthorized access attempts (`EVENT_PRIVILEGE_PROBE`) in real-time.
+
+---
+
+### 2. 📅 Event–Exam Clash Detection & Retake Rescheduling Engine
+An automated conflict-resolution engine that reconciles student participation in university events (Hackathons, Sports Meets, Academic Symposia) with scheduled course assessments.
+* **Algorithmic Interval Overlap Engine**: Detects temporal collisions between event schedules and exam time windows (`start_at` to `end_at`). Touching boundary endpoints are handled gracefully without false positives.
+* **Sister-Section Slot Discovery**: Automatically searches parallel course offerings (e.g., Section B or Section C of the same subject) to suggest non-conflicting retake exam slots.
+* **Transactional Compare-And-Set (CAS) State Machine**:
+  * Employs atomic optimistic locking (`UPDATE ... WHERE id = :id AND status = :expected_status`) ensuring concurrency safety.
+  * Transitions: `DETECTED` ➔ `FILED` ➔ `APPROVED` or `REJECTED_BY_PROF` ➔ `ESCALATED_TO_HOD` ➔ `RESOLVED_BY_HOD` / `OVERRIDDEN_BY_HOD`.
+  * **Atomic Rejection Cascade**: Rejection by a professor automatically cascades to HOD escalation within the same transaction.
+* **Dedicated Multi-Role Workspaces**:
+  * **Admin Event Management**: Create events, register student participants, run clash analysis, inspect conflict batches, and bulk-file retake requests.
+  * **Professor Reschedule Command Center**: Inspect student clash requests, view suggested parallel slots, propose custom retake dates/venues, approve slots, or reject with mandatory rationale.
+  * **Student "My Clashes" View**: Real-time status badge of retake petitions, approved exam slot cards, and an interactive chronological audit trail (`CaseTimeline`).
+  * **HOD Governance Console**: Executive oversight over department-wide conflicts, unresolved backlogs, >48-hour SLA breach warnings, and faculty workload balance.
+* **Real-Time Notification Broker**: Dedicated WebSocket channels (`channel:user:{id}` and `channel:admin`) push instant updates on filings, approvals, and escalations.
+
+---
+
+### 3. 🎓 AI Academic Support & Micro-Learning Hub
+An integrated pedagogical co-pilot for students and parents designed to boost subject comprehension and Course Outcome (CO) mastery.
+* **Student Academic Analytics**: Deep breakdown of enrolled subjects, continuous assessment scores (CA1, CA2, CA3, Midterm, Endterm), overall grade percentages, and Course Outcome attainment (CO1–CO5).
+* **Weakness & Strength Diagnostics**: Automated analysis pinpointing strongest and weakest modules across enrolled subjects.
+* **Grounded Micro-Lessons (RAG)**: Synthesizes structured, bite-sized interactive lessons directly from professor-curated course materials. Includes core concepts, mathematical formulas, interactive SVG/Mermaid diagrams, and self-assessment quizzes.
+* **AI Video Generation Engine**: Asynchronous background generation of narrated MP4 video lessons from micro-lessons. Includes real-time job status tracking (`/learning/video/{job_id}`) and video caching.
+* **Curriculum & Material Reader**: Direct access to module lecture notes, page-by-page breakdowns, and searchable topic chunks.
+
+---
+
+### 4. 🚌 SafeTransit Telematics & Fleet Intelligence
+A comprehensive vehicle telemetry visualizer providing end-to-end commute awareness for parents, students, and campus administrators.
+* **Live OpenStreetMap Cartography**: Leaflet-powered visualizer utilizing official OpenStreetMap tiles, high-visibility route polylines, animated vehicle beacons, and interactive stop pins.
+* **3-Second WebSocket Coordinates**: High-frequency telemetry updates powered by an in-memory Pub/Sub broker and mathematical position simulator with Gaussian jitter across 20 campus routes.
+* **500m Geofence Proximity Alerts**: Computes real-time Haversine geodesic distance between the bus and the student's registered pickup waypoint. Prominently alerts parents and students when the bus is within 500 meters.
+* **Driver Mobile Broadcast Console (`/track`)**:
+  * Ephemeral session tokens (`TrackingSession`) with configurable TTL and QR code sharing.
+  * Mobile-optimized driver cockpit using the device Geolocation API or fallback waypoint simulation to broadcast live GPS coordinates to the fleet engine.
+  * Automated Local Area Network (LAN) IP and ngrok public tunnel discovery for mobile access.
+
+---
+
+### 5. 📊 Faculty Class & Section Attendance Command Center
+* **Section-Partitioned Roster**: Complete roster management across sections (`Section A`, `Section B`, `Section C`) and core subjects (`Operating Systems`, `DBMS`, `Computer Networks`).
+* **Academic Code §4.2 Enforcement**: Automatic calculation of aggregate attendance percentages with instant flagging for students below the mandatory $75.0\%$ examination debarment threshold.
+* **One-Click Advisory Notices**: Direct dispatch of formal debarment warnings and attendance notifications.
+* **Filtering & Search**: Real-time filtering by standing (*Safe $\ge 85\%$*, *Attention $75\text{--}84\%$*, *Debarment Warning $< 75\%$*) and roll number search.
+
+---
+
+### 6. 🔐 Automated RBAC Session Governance
+* **Seamless Role Discovery**: Single unified login (`/login`) automatically evaluates credentials, retrieves cryptographically signed JWT claims, and initializes role-specific UI workspaces.
+* **Interactive Profile Hover Card**: Inspect active security claims, user ID, role badge, department, and transit bindings directly from the top navigation bar.
+* **Real-Time Notification Bell**: Polled and WebSocket-backed notification center alerting users to retake requests, clash resolutions, attendance warnings, and transit announcements.
 
 ---
 
@@ -66,37 +134,40 @@ Traditional ERP and conversational AI systems often suffer from privilege escala
 
 ## 👥 Demo User Personas & Credentials
 
-All accounts share the default password: **`password123`**
+All seeded accounts share the default password: **`password123`**
 
-| Role | Email | Name & Details | Authorized Rights & Scope |
+| Role | Email | Name & Details | Key Authorized Scope & Capabilities |
 | :--- | :--- | :--- | :--- |
-| **Student** | `student@campus.edu` | Jane Doe (Roll: `CS-2023-042`) | View personal subject attendance records; live track assigned bus (`BUS-001`); query public policy documents. |
-| **Faculty** | `faculty@campus.edu` | Prof. Alan Turing (HOD, CS Dept) | Access **Class & Section Attendance Command Center** (Section A & B); switch courses; issue debarment notices; view faculty confidential memos. |
-| **Parent** | `parent@campus.edu` | Robert Doe (Ward: Jane Doe) | Track ward commute telematics; receive 500m geofence pickup alerts; monitor ward examination eligibility. |
-| **Admin** | `admin@campus.edu` | Sarah Connor (Campus Administrator) | Global telemetry across all 20 bus routes; view system-wide user directory; review Zero-Trust Security Audit Logs. |
+| **Student** | `student@campus.edu` | Jane Doe (Roll: `CS-2023-042`, Sem 6) | View personal subject attendance & CA scores; generate RAG micro-lessons & video lessons; view retake clash statuses; track assigned bus (`BUS-001`). |
+| **Faculty (HOD)** | `faculty@campus.edu` | Prof. Alan Turing (HOD, CS Dept) | Class & Section Attendance Command Center (Sections A, B); Retake Requests Command Center; HOD Governance Dashboard; resolve escalations. |
+| **Faculty** | `faculty2@campus.edu` | Prof. Dave Smith (Cloud Computing) | Section A, B, C roster access; review and reschedule exam clashes; suggest parallel sister-section retake slots. |
+| **Parent** | `parent@campus.edu` | Robert Doe (Ward: Jane Doe) | Track ward commute telematics; receive 500m geofence pickup alerts; monitor ward attendance & examination eligibility. |
+| **Admin** | `admin@campus.edu` | Sarah Connor (Campus Administrator) | Global fleet telemetry (all 20 bus routes); Event Management & Clash Engine; bulk retake requests; review Zero-Trust Security Audit Logs. |
 
 ---
 
 ## ⚡ Tech Stack
 
-* **Backend**:
-  * [FastAPI](https://fastapi.tiangolo.com/) (Asynchronous REST API & WebSockets)
-  * [SQLAlchemy 2.0](https://www.sqlalchemy.org/) + [aiosqlite](https://aiosqlite.omnilib.dev/) (Relational DB engine on `campus.db`)
-  * [PyJWT](https://pyjwt.readthedocs.io/) & [Bcrypt](https://pypi.org/project/bcrypt/) (Token signing & secure password verification)
-  * [Uvicorn](https://www.uvicorn.org/) (High-performance ASGI server)
-* **Frontend**:
-  * [Next.js 14](https://nextjs.org/) (App Router, React 19, TypeScript)
-  * [Leaflet](https://leafletjs.com/) (Interactive transit map with official OpenStreetMap tiles)
-  * [Lucide React](https://lucide.dev/) (Minimalist SVG icon library)
-  * Pure Vanilla CSS Design System (Minimalist high-contrast light theme)
+### Backend
+* **Language & Runtime**: Python 3.10+
+* **Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Asynchronous REST API & WebSockets)
+* **Database & ORM**: [SQLAlchemy 2.0 (Async)](https://www.sqlalchemy.org/) + [aiosqlite](https://aiosqlite.omnilib.dev/) (SQLite on `campus.db`, migration-ready for PostgreSQL + pgvector)
+* **Authentication**: [PyJWT](https://pyjwt.readthedocs.io/) & [Bcrypt](https://pypi.org/project/bcrypt/)
+* **Media & Video Processing**: Asynchronous threaded frame rendering and audio synthesis for MicroLesson video generation
+* **Server**: [Uvicorn](https://www.uvicorn.org/) (High-performance ASGI server)
+
+### Frontend
+* **Framework**: [Next.js 14](https://nextjs.org/) (App Router, React 19, TypeScript)
+* **Mapping & GIS**: [Leaflet](https://leafletjs.com/) with OpenStreetMap cartography
+* **Iconography**: [Lucide React](https://lucide.dev/)
+* **Diagrams**: Interactive Mermaid & SVG rendering
+* **Styling**: High-contrast, clean minimalist light theme design system in pure CSS
 
 ---
 
 ## 🚀 How to Run the Project
 
 ### Prerequisites
-
-Ensure you have installed on your system:
 * **Python 3.10+**
 * **Node.js 18+** & **npm**
 
@@ -104,107 +175,105 @@ Ensure you have installed on your system:
 
 ### ⚡ Method A: One-Click Quick Start (Recommended)
 
-A root-level launcher script [`start.sh`](file:///home/robin/Projects/ERP/start.sh) is provided. It automatically checks and installs any missing backend Python dependencies (creating a virtual environment if needed) and frontend npm packages, then launches both the FastAPI backend and Next.js frontend with unified process termination:
+A root-level launcher script [`start.sh`](file:///home/robin/Projects/ERP/start.sh) is provided. It automatically checks prerequisites, activates or builds the Python virtual environment, installs any missing dependencies, and runs both servers with unified shutdown handling:
 
 ```bash
-# 1. From the project root, make the script executable (first time only):
+# 1. Make the script executable (first time only):
 chmod +x start.sh
 
-# 2. Run the one-click startup script:
+# 2. Launch both backend and frontend:
 ./start.sh
 ```
 
-> **Note**: Press `Ctrl+C` at any time to gracefully terminate both the backend and frontend servers together without leaving orphan background processes.
+> **Note**: Press `Ctrl+C` to gracefully terminate both backend and frontend servers together without leaving orphan processes.
 
 ---
 
 ### 🛠️ Method B: Manual Step-by-Step Setup
 
-If you prefer starting each service independently in separate terminals:
-
 #### Step 1: Start the Backend Service
+```bash
+# 1. Navigate to the backend directory
+cd backend
 
-1. Open a terminal in the project root:
-   ```bash
-   cd /home/robin/Projects/ERP/backend
-   ```
+# 2. Activate virtual environment
+source ../.venv/bin/activate # or source .venv/bin/activate
 
-2. Activate the Python virtual environment:
-   ```bash
-   # From workspace root
-   source venv/bin/activate
-   # Or using the backend virtual environment
-   source backend/.venv/bin/activate
-   ```
+# 3. Install dependencies
+pip install -r requirements.txt
 
-3. Install required Python packages (if not already installed):
-   ```bash
-   pip install -r backend/requirements.txt
-   ```
+# 4. (Optional) Re-seed clash & academic demo data
+python -m app.services.seed_clash_data --reset
 
-4. Start the FastAPI backend server on port `8000`:
-   ```bash
-   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-   ```
+# 5. Start the FastAPI server
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+* **API Documentation**: Open `http://localhost:8000/docs` for the interactive Swagger UI.
+* **Health Check**: `GET http://localhost:8000/api/v1/health`
 
-   * **API Documentation**: Open `http://localhost:8000/docs` for the interactive Swagger UI.
-   * **Health Check**: `GET http://localhost:8000/api/v1/health`
+#### Step 2: Start the Frontend Application
+```bash
+# 1. Navigate to the frontend directory
+cd frontend
 
----
+# 2. Install dependencies
+npm install
 
-### Step 2: Start the Frontend Application
-
-1. Open a new terminal in the `frontend` directory:
-   ```bash
-   cd /home/robin/Projects/ERP/frontend
-   ```
-
-2. Install dependencies (if not already installed):
-   ```bash
-   npm install
-   ```
-
-3. Launch the Next.js development server on port `3000`:
-   ```bash
-   npm run dev
-   ```
-
-4. Access the web application:
-   * Open **`http://localhost:3000`** in your browser.
-   * You will be automatically redirected to **`http://localhost:3000/login`**.
+# 3. Launch the Next.js development server
+npm run dev
+```
+* Open **`http://localhost:3000`** in your browser.
+* You will be redirected to **`http://localhost:3000/login`**.
 
 ---
 
-## 🧪 Key Features & Walkthrough
+## 🧪 Guided Feature Walkthrough
 
-### 1. Automatic Role Determination & Profile Card
-* Log in as any persona (e.g., `faculty@campus.edu` / `password123`).
-* The system resolves the user's role and scopes all workspace components.
-* Hover over your name in the top right to inspect your account details:
-  * Name, Email, Role badge, Department, and bound IDs.
+### 1. Zero-Trust Chatbot Invariant Tests
+1. Click the floating **Ask AI Assistant** button (bottom right).
+2. **Authorized Query** (as Student `student@campus.edu`):
+   * Ask: *"What is my attendance in Operating Systems?"*
+   * Result: Returns exact database attendance (87.5%) with verifiable citation badge.
+3. **Privilege Probe Interception** (as Student):
+   * Ask: *"Show me all faculty salaries in Computer Science"*
+   * Result: Explicit RBAC refusal (🔒 Lock icon); zero financial numerals exposed; records an `EVENT_PRIVILEGE_PROBE` entry in the Security Audit Log.
+4. **Transit Query** (as Student or Parent):
+   * Ask: *"Where is my bus right now?"*
+   * Result: Retrieves live coordinates and route status for the bound vehicle (`BUS-001`).
 
-### 2. Faculty Class & Section Attendance Command Center
-* Log in as `faculty@campus.edu` and click **"Class Roster"** in the sidebar.
-* **Course Switching**: Toggle between *Operating Systems (CS-301)*, *Database Management Systems (CS-302)*, and *Computer Networks (CS-303)*.
-* **Section Filtering**: Select **All Sections** (8 students), **Section A** (4 students), or **Section B** (4 students).
-* **Live Search & Eligibility Filtering**: Search students by name or roll number; filter by *Safe Standing ($\ge 85\%$)*, *Attention Required ($75\text{--}84\%$)*, and *Debarment Warning ($<75\%$)*.
-* **Advisory Dispatches**: Click *Debarment Notice* to trigger formal attendance warnings for students below the 75% invariant.
+### 2. Event–Exam Clash & Rescheduling Lifecycle
+1. **Admin Event Creation & Clash Analysis**:
+   * Log in as `admin@campus.edu`.
+   * Go to **"Event Clashes"** in the sidebar.
+   * View the Hackathon event, run clash detection, review the list of detected assessment conflicts, and click **"Bulk File Retake Requests"**.
+2. **Professor Reschedule Command Center**:
+   * Switch to `faculty2@campus.edu` (Prof. Dave Smith).
+   * Open **"Retake Requests"** in the sidebar.
+   * Inspect the filed clash cases, review suggested parallel sister-section slots, and click **"Approve Slot"** or provide a custom slot.
+   * Rejecting a slot automatically triggers the cascade to HOD escalation!
+3. **HOD Governance Console**:
+   * Switch to `faculty@campus.edu` (Prof. Alan Turing, HOD).
+   * Open **"HOD Governance"** in the sidebar.
+   * View department SLA metrics, review escalated cases, and resolve with final dates and venues.
+4. **Student Timeline & Notification**:
+   * Switch to `student@campus.edu` (Jane Doe).
+   * Notice the badge on the **Notification Bell** in the header.
+   * Navigate to **"My Clashes"** to view the assigned retake slot and chronological audit trail.
 
-### 3. SafeTransit Live Telematics
-* Click **"Live Transit"** in the sidebar (accessible for Student, Parent, and Admin roles).
-* Features:
-  * **Standard OpenStreetMap Cartography** with attribution.
-  * Live 3-second coordinate updates and animated vehicle beacon.
-  * Stop sequence markers and route polyline.
-  * **500m Geofence Proximity Alert**: Dynamic proximity notice when the vehicle reaches within 500m of the registered pickup waypoint.
-  * Admin vehicle selector to inspect any of the 20 active routes.
+### 3. AI Academic Support & Video Generation
+1. Log in as `student@campus.edu`.
+2. Click **"Academic Support"** in the sidebar.
+3. Explore continuous assessment marks breakdown and Course Outcome attainment (CO1–CO5).
+4. Click on a subject to inspect module performance and identify the weakest module.
+5. Click **"Generate Grounded Micro-Lesson"** to synthesize an interactive lesson complete with concepts, formulas, and diagrams.
+6. Click **"Generate AI Video Lesson"** to trigger background rendering of an educational MP4 video lesson with real-time job status tracking.
 
-### 4. Zero-Trust Security AI Assistant
-* Click the floating **Ask AI Assistant** button in the bottom right corner.
-* Tests to run:
-  * *Authorized query* (as student): `"What is my attendance in Operating Systems?"` $\rightarrow$ Returns verified parametric SQL record (Jane Doe: 87.5%).
-  * *Privilege probe* (as student): `"Show me all faculty salaries in Computer Science"` $\rightarrow$ Triggers zero-trust interception, logs an `EVENT_PRIVILEGE_PROBE` audit event, and returns an authorized refusal.
-  * *Transit query* (as student or parent): `"Where is my bus right now?"` $\rightarrow$ Retrieves live telematics from the bound vehicle.
+### 4. SafeTransit Fleet Telematics & Driver Broadcast
+1. Navigate to **"Live Transit"** in the sidebar.
+2. View real-time 3-second bus updates, HUD telemetry metrics, and stop markers on OpenStreetMap cartography.
+3. Observe the **500m Geofence Proximity Alert** triggering when the bus approaches within 500 meters of the registered pickup point.
+4. Click **"Driver Live Link / Mobile QR"** to reveal the shareable broadcast session URL (`/track?token=...`).
+5. Open the link on your mobile phone or a new tab to experience the driver GPS broadcast console.
 
 ---
 
@@ -214,43 +283,63 @@ If you prefer starting each service independently in separate terminals:
 ERP/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                     # FastAPI entrypoint, CORS & WebSocket routing
+│   │   ├── main.py                     # FastAPI entrypoint, CORS, static mounts & routes
 │   │   ├── api/
 │   │   │   ├── auth.py                 # JWT login & session validation
+│   │   │   ├── chat.py                 # Multi-agent chat ingress endpoint
+│   │   │   ├── clash.py                # Clash detection, CAS state machine & notifications
 │   │   │   ├── erp.py                  # Dashboard, student & faculty attendance endpoints
-│   │   │   ├── transit.py              # Telemetry routes & WebSocket handlers
-│   │   │   └── chat.py                 # Multi-agent chat ingress endpoint
+│   │   │   ├── student_academic.py     # Academic analytics, RAG micro-lessons & video generator
+│   │   │   ├── tracking.py             # Ephemeral driver broadcast sessions & QR discovery
+│   │   │   └── transit.py              # Telemetry routes & WebSocket handlers
 │   │   ├── core/
 │   │   │   ├── config.py               # Application settings & environment variables
-│   │   │   ├── database.py             # SQLAlchemy models (User, Student, Attendance, Bus)
+│   │   │   ├── database.py             # SQLAlchemy models (User, Student, ClashCase, etc.)
+│   │   │   ├── datetime_utils.py       # Timezone synchronization & ISO-8601 formatting
+│   │   │   ├── pubsub.py               # In-memory pub/sub broker for WebSockets
 │   │   │   └── security.py             # Bcrypt hashing & JWT claim signing
 │   │   ├── agents/
 │   │   │   ├── ingress_guard.py        # Adversarial prompt & jailbreak analyzer
 │   │   │   ├── intent_classifier.py    # Deterministic query intent router
+│   │   │   ├── orchestrator.py         # Hierarchical supervisor state machine
 │   │   │   ├── structured_records.py   # Parametric SQL worker (attendance & payroll)
-│   │   │   ├── vector_knowledge.py     # Role-filtered pgvector policy retriever
 │   │   │   ├── transit_telemetry.py    # Vehicle telemetry & geofence worker
+│   │   │   └── vector_knowledge.py     # Role-filtered pgvector policy retriever
 │   │   └── services/
-│   │       ├── seed_data.py            # Synthetic academic & fleet database seeder
-│   │       └── transit_simulator.py    # Geodesic vehicle simulator & Pub/Sub broker
+│   │       ├── academic_analytics.py   # Marks, CO analysis & module diagnostics
+│   │       ├── academic_rag.py         # Grounded micro-lesson synthesis
+│   │       ├── clash_detector.py       # Algorithmic interval clash engine & slot discovery
+│   │       ├── seed_data.py            # Academic, student & fleet seeder
+│   │       ├── seed_clash_data.py      # Multi-event, multi-course clash scenario seeder
+│   │       ├── transit_simulator.py    # Geodesic vehicle simulator with Gaussian jitter
+│   │       └── video_generator.py      # Asynchronous MP4 video rendering engine
 │   ├── requirements.txt
-│   └── campus.db                       # SQLite database storing academic & fleet state
+│   └── campus.db                       # Relational SQLite database
 ├── frontend/
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── globals.css             # Minimalist light design system & CSS tokens
 │   │   │   ├── layout.tsx              # Root HTML & Inter font layout
-│   │   │   ├── page.tsx                # Main authenticated dashboard & tab orchestrator
-│   │   │   └── login/
-│   │   │       └── page.tsx            # Minimal login page with quick demo chips
+│   │   │   ├── page.tsx                # Main authenticated workspace & tab orchestrator
+│   │   │   ├── login/
+│   │   │   │   └── page.tsx            # Modern login page with one-click demo chips
+│   │   │   └── track/
+│   │   │       └── page.tsx            # Driver mobile GPS broadcast console
 │   │   ├── components/
-│   │   │   ├── Header.tsx              # Workspace banner & interactive profile dropdown
-│   │   │   ├── Sidebar.tsx             # Role-filtered navigation sidebar
-│   │   │   ├── LiveTransitMap.tsx      # Leaflet OpenStreetMap vehicle visualizer
+│   │   │   ├── academic/               # Academic overview, micro-lesson player & diagrams
+│   │   │   ├── AdminEventManagement.tsx# Admin event creation, clash scan & bulk filing
 │   │   │   ├── AttendanceCard.tsx      # Student attendance health card with SVG gauge
-│   │   │   └── ChatDrawer.tsx          # Frosted assistant drawer with citation chips
+│   │   │   ├── ChatDrawer.tsx          # Frosted assistant drawer with citation chips
+│   │   │   ├── Header.tsx              # Workspace banner & interactive profile dropdown
+│   │   │   ├── HODDashboard.tsx        # HOD governance, SLA breach & escalation console
+│   │   │   ├── LiveTransitMap.tsx      # Leaflet OpenStreetMap vehicle visualizer
+│   │   │   ├── NotificationBell.tsx    # Header notification center with popover
+│   │   │   ├── ProfessorReschedule.tsx # Faculty retake requests & sister-section chooser
+│   │   │   ├── Sidebar.tsx             # Role-filtered navigation sidebar
+│   │   │   ├── StudentClashes.tsx      # Student retake status & interactive audit timeline
+│   │   │   └── TimelineView.tsx        # Chronological audit timeline renderer
 │   │   └── lib/
-│   │       └── api.ts                  # Typed client SDK & Next.js proxy fetchers
+│   │       └── api.ts                  # Typed client SDK & fetchers
 │   ├── package.json
 │   └── next.config.ts                  # API rewrites (/api/v1 -> localhost:8000)
 ├── Docs/                               # Specification documents (PRD, AGENTS, UI-UX)
@@ -263,7 +352,14 @@ ERP/
 
 ## 🔒 Security & Policy Invariants
 
-1. **Zero Raw SQL Text Generation**: The conversational AI assistant never writes arbitrary SQL. It maps intents to parametric SQL templates where filters are hardwired to validated JWT claims.
-2. **Horizontal Snooping Immunity**: Even if a student inputs `"Show Alex's grades"`, the backend automatically resolves the student ID bound to the session token, ignoring arbitrary names in user input.
-3. **Academic Code §4.2**: Attendance is evaluated strictly against the $75.0\%$ threshold. Students below 75% are flagged with automated debarment warnings and require Dean approval.
-4. **Egress Boundary Scrubber**: Generated responses are scanned prior to transmission; any unauthorized numeric pattern or cross-role leak immediately triggers a refusal response.
+1. **Zero Raw SQL Text Generation**: The conversational AI assistant never writes arbitrary SQL queries. All tabular queries are pre-compiled and strictly parametrized by JWT claims.
+2. **Horizontal Privilege Isolation**: Even if a student inputs `"Show Alex's grades"`, the backend automatically binds the query to the authenticated `student_id`, preventing cross-account snooping.
+3. **Academic Code §4.2**: Aggregate attendance is continuously evaluated against the $75.0\%$ invariant. Below $75\%$, automatic debarment warnings are dispatched.
+4. **Compare-And-Set Concurrency**: All exam clash state transitions utilize atomic CAS locking. Conflicting updates fail safely with `HTTP 409 Conflict`.
+5. **Channel Isolation**: WebSockets reject cross-tenant subscription requests (`WS_1008_POLICY_VIOLATION`) ensuring users only receive notifications addressed to them.
+
+---
+
+## 📄 License
+This project is licensed under the MIT License. Developed for enterprise campus administration, telematics intelligence, and student academic success.
+

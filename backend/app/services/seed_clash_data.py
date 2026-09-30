@@ -36,7 +36,7 @@ async def reset_clash_scenario_data(session):
     await session.execute(delete(Notification))
     await session.execute(delete(CaseTimeline))
     await session.execute(delete(ClashCase))
-    await session.execute(delete(Assessment))
+    await session.execute(delete(Assessment).where(Assessment.offering_id.isnot(None)))
     await session.execute(delete(CourseOffering))
     await session.execute(delete(EventParticipant))
     await session.execute(delete(Event))
@@ -249,7 +249,9 @@ async def seed_clash_scenario(reset: bool = False):
                 u.password_hash = pwd_hash
                 u.name = name
 
-            s = (await session.execute(select(Student).where(Student.user_id == u.id))).scalar_one_or_none()
+            s = (await session.execute(select(Student).where(
+                (Student.user_id == u.id) | (Student.roll_number == roll_no)
+            ))).scalar_one_or_none()
             if not s:
                 s = Student(
                     user_id=u.id,
@@ -261,6 +263,7 @@ async def seed_clash_scenario(reset: bool = False):
                 session.add(s)
                 await session.flush()
             else:
+                s.user_id = u.id
                 s.roll_number = roll_no
                 s.section = section
                 s.department = "Computer Science"

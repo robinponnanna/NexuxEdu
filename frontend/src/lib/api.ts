@@ -8,6 +8,8 @@ export interface UserProfile {
   student_id?: number;
   ward_id?: number;
   bus_id?: number;
+  faculty_id?: number;
+  is_hod?: boolean;
 }
 
 export interface AuthSession {
@@ -695,6 +697,344 @@ export async function getVideoByLesson(
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Failed to fetch video for lesson (${res.status})`);
   }
+  return res.json();
+}
+
+// --- Event-Exam Clash & Retake Rescheduling Types & Methods ---
+
+export interface EventItem {
+  id: number;
+  title: string;
+  description?: string;
+  start_at: string;
+  end_at: string;
+  created_by: number;
+  created_at: string;
+  participants_count?: number;
+  clashes_count?: number;
+}
+
+export interface CaseTimelineEntry {
+  id: number;
+  case_id: number;
+  actor_user_id?: number;
+  actor_name?: string;
+  actor_role: string;
+  from_status?: string;
+  to_status: string;
+  note?: string;
+  at: string;
+}
+
+export interface ClashCaseItem {
+  id: number;
+  event_id: number;
+  event_title: string;
+  student_id: number;
+  student_name: string;
+  student_roll: string;
+  student_section?: string;
+  student_department?: string;
+  assessment_id: number;
+  course_code: string;
+  subject: string;
+  offering_section?: string;
+  assessment_kind: string;
+  assessment_start?: string;
+  assessment_end?: string;
+  assessment_start_at?: string;
+  assessment_end_at?: string;
+  faculty_id?: number;
+  faculty_name?: string;
+  status: "DETECTED" | "REQUEST_FILED" | "COUNTER_PROPOSED" | "REJECTED" | "ESCALATED_TO_HOD" | "APPROVED" | "COMPLETED";
+  suggested_retake_assessment_id?: number;
+  suggested_retake_info?: string;
+  retake_assessment_id?: number;
+  retake_info?: string;
+  retake_at?: string;
+  retake_note?: string;
+  rejection_reason?: string;
+  created_at: string;
+  updated_at: string;
+  timeline?: CaseTimelineEntry[];
+}
+
+export interface EventDetailItem extends EventItem {
+  clashes: ClashCaseItem[];
+}
+
+export interface HODOverview {
+  department: string;
+  total_cases?: number;
+  by_status?: Record<string, number>;
+  counts_by_status: Record<string, number>;
+  escalated_cases: ClashCaseItem[];
+  stuck_cases: ClashCaseItem[];
+  per_professor_pending?: Record<string, number>;
+  pending_per_professor?: Record<string, number>;
+}
+
+export interface NotificationItem {
+  id: number;
+  user_id: number;
+  type: string;
+  title: string;
+  body: string;
+  case_id?: number;
+  event_id?: number;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface ReferenceStudent {
+  id: number;
+  user_id: number;
+  name: string;
+  roll_number: string;
+  department: string;
+  semester: number;
+  section: string;
+}
+
+export interface ReferenceAssessment {
+  id: number;
+  kind: string;
+  start_at: string;
+  end_at: string;
+  venue?: string;
+}
+
+export interface ReferenceOffering {
+  id: number;
+  course_code: string;
+  subject: string;
+  section: string;
+  semester: number;
+  department: string;
+  faculty_id: number;
+  faculty_name: string;
+  assessments: ReferenceAssessment[];
+}
+
+export async function getEvents(token: string): Promise<EventItem[]> {
+  const res = await fetch(`${getApiBase()}/clash/events`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch events");
+  return res.json();
+}
+
+export async function createEvent(
+  token: string,
+  data: { title: string; description?: string; start_at: string; end_at: string }
+): Promise<EventItem> {
+  const res = await fetch(`${getApiBase()}/clash/events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to create event");
+  }
+  return res.json();
+}
+
+export async function getEventDetail(token: string, eventId: number): Promise<EventDetailItem> {
+  const res = await fetch(`${getApiBase()}/clash/events/${eventId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch event details");
+  return res.json();
+}
+
+export async function addEventParticipants(
+  token: string,
+  eventId: number,
+  studentIds: number[]
+): Promise<{ message: string; event_id: number; clashes_count: number }> {
+  const res = await fetch(`${getApiBase()}/clash/events/${eventId}/participants`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ student_ids: studentIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to add participants");
+  }
+  return res.json();
+}
+
+export async function manualDetectClashes(token: string, eventId: number) {
+  const res = await fetch(`${getApiBase()}/clash/events/${eventId}/detect`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Detection run failed");
+  return res.json();
+}
+
+export async function getClashCases(
+  token: string,
+  filters?: { status?: string; event_id?: number; assessment_id?: number }
+): Promise<ClashCaseItem[]> {
+  const params = new URLSearchParams();
+  if (filters?.status) params.append("status", filters.status);
+  if (filters?.event_id) params.append("event_id", String(filters.event_id));
+  if (filters?.assessment_id) params.append("assessment_id", String(filters.assessment_id));
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${getApiBase()}/clash/cases${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch clash cases");
+  return res.json();
+}
+
+export async function getClashCaseDetail(token: string, caseId: number): Promise<ClashCaseItem> {
+  const res = await fetch(`${getApiBase()}/clash/cases/${caseId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch case details");
+  return res.json();
+}
+
+export async function fileClashCasesBulk(token: string, caseIds: number[]): Promise<ClashCaseItem[]> {
+  const res = await fetch(`${getApiBase()}/clash/cases/file`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ case_ids: caseIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to file requests");
+  }
+  return res.json();
+}
+
+export async function professorDecideCases(
+  token: string,
+  payload: {
+    case_ids: number[];
+    decision: "approve" | "counter" | "reject";
+    slot_id?: number;
+    custom_at?: string;
+    note?: string;
+    rejection_reason?: string;
+  }
+): Promise<ClashCaseItem[]> {
+  const res = await fetch(`${getApiBase()}/clash/cases/decision`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Decision failed");
+  }
+  return res.json();
+}
+
+export async function acceptCounterProposal(token: string, caseId: number): Promise<ClashCaseItem> {
+  const res = await fetch(`${getApiBase()}/clash/cases/${caseId}/accept-counter`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Accept counter failed");
+  }
+  return res.json();
+}
+
+export async function sendBackCounterProposal(token: string, caseId: number, note: string): Promise<ClashCaseItem> {
+  const res = await fetch(`${getApiBase()}/clash/cases/${caseId}/send-back`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ note }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Send back failed");
+  }
+  return res.json();
+}
+
+export async function hodOverrideCase(
+  token: string,
+  caseId: number,
+  payload: { slot_id?: number; custom_at?: string; note: string }
+): Promise<ClashCaseItem> {
+  const res = await fetch(`${getApiBase()}/clash/cases/${caseId}/override`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "HOD override failed");
+  }
+  return res.json();
+}
+
+export async function completeClashCase(token: string, caseId: number): Promise<ClashCaseItem> {
+  const res = await fetch(`${getApiBase()}/clash/cases/${caseId}/complete`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to mark complete");
+  }
+  return res.json();
+}
+
+export async function getHODOverview(token: string): Promise<HODOverview> {
+  const res = await fetch(`${getApiBase()}/clash/hod/overview`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch HOD overview");
+  return res.json();
+}
+
+export async function getReferenceStudents(token: string, q?: string): Promise<ReferenceStudent[]> {
+  const query = q ? `?q=${encodeURIComponent(q)}` : "";
+  const res = await fetch(`${getApiBase()}/clash/reference/students${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch students");
+  return res.json();
+}
+
+export async function getReferenceOfferings(token: string): Promise<ReferenceOffering[]> {
+  const res = await fetch(`${getApiBase()}/clash/reference/offerings`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch course offerings");
+  return res.json();
+}
+
+export async function getNotifications(token: string): Promise<NotificationItem[]> {
+  const res = await fetch(`${getApiBase()}/clash/notifications`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch notifications");
+  return res.json();
+}
+
+export async function markNotificationRead(token: string, notifId: number) {
+  const res = await fetch(`${getApiBase()}/clash/notifications/${notifId}/read`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+}
+
+export async function markAllNotificationsRead(token: string) {
+  const res = await fetch(`${getApiBase()}/clash/notifications/read-all`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
   return res.json();
 }
 
