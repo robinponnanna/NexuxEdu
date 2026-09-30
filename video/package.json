@@ -1,0 +1,16 @@
+{
+  "name": "nexuxedu-video-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion declarative video rendering engine for NexuxEdu Student Academic Micro-Lessons",
+  "scripts": {
+    "render": "node src/render.js",
+    "video:demo": "node src/render.js --demo"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.0",
+    "@remotion/cli": "^4.0.0"
+  }
+}

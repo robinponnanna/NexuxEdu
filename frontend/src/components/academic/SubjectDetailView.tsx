@@ -24,7 +24,7 @@ import {
 interface SubjectDetailViewProps {
   detail: SubjectMarksDetailResponse;
   onBack: () => void;
-  onStudyModule: (moduleId: number) => void;
+  onStudyModule: (moduleId: number, isWeak?: boolean) => void;
 }
 
 export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
@@ -238,7 +238,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
 
           <button
             type="button"
-            onClick={() => onStudyModule(weakest.id)}
+            onClick={() => onStudyModule(weakest.id, true)}
             style={{
               background: "var(--color-primary)",
               color: "#FFFFFF",
@@ -386,7 +386,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                   <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "2px" }}>
                     <button
                       type="button"
-                      onClick={() => onStudyModule(mod.id)}
+                      onClick={() => onStudyModule(mod.id, isWeakest || mod.status === "Needs Support")}
                       style={{
                         background: "transparent",
                         border: "none",

@@ -389,6 +389,18 @@ export interface AcademicSourceCitation {
   subject_code?: string | null;
 }
 
+export interface YouTubeResource {
+  video_id?: string | null;
+  title: string;
+  channel?: string | null;
+  start_seconds?: number | null;
+  end_seconds?: number | null;
+  description?: string | null;
+  search_url?: string | null;
+  search_query?: string | null;
+  is_embeddable?: boolean;
+}
+
 export interface MicroLessonScene {
   scene_id: number;
   type?: "concept" | "diagram" | "example" | "comparison" | "flow" | "common_mistake" | "formula" | "takeaway";
@@ -421,6 +433,9 @@ export interface MicroLessonPayload {
   objective?: string;
   scenes: MicroLessonScene[];
   sources: AcademicSourceCitation[];
+  video_url?: string | null;
+  video_status?: VideoStatusType | null;
+  youtube_resource?: YouTubeResource | null;
 }
 
 export interface ModuleLearningMaterialResponse {
@@ -466,6 +481,63 @@ export interface AcademicExplainResponse {
     retrieved_chunks_count?: number;
   };
   generation: GenerationMetadata;
+}
+
+export type VideoStatusType =
+  | "none"
+  | "queued"
+  | "rendering"
+  | "audio_generating"
+  | "video_rendering"
+  | "completed"
+  | "ready"
+  | "failed";
+
+export type FrontendVideoState =
+  | "NO_VIDEO"
+  | "QUEUED"
+  | "GENERATING"
+  | "READY"
+  | "FAILED_RETRY";
+
+export type FrontendYouTubeState =
+  | "EMBEDDED_VIDEO"
+  | "SEARCH_FALLBACK"
+  | "UNAVAILABLE";
+
+export interface VideoGenerationRequest {
+  lesson_id?: number | null;
+  topic_key?: string | null;
+  subject_id?: number | null;
+  module_id?: number | null;
+  topic?: string | null;
+  co_code?: string | null;
+  lesson_payload?: any;
+}
+
+export interface VideoJobResponse {
+  job_id: string;
+  lesson_id?: number | null;
+  topic_key: string;
+  status: "queued" | "rendering" | "audio_generating" | "video_rendering" | "completed" | "ready" | "failed";
+  progress_pct?: number;
+  video_url?: string | null;
+  duration_seconds?: number | null;
+  error_message?: string | null;
+  retryable?: boolean;
+}
+
+// Helper to resolve media URLs to the FastAPI backend host
+export function resolveMediaUrl(pathOrUrl?: string | null): string {
+  if (!pathOrUrl) return "";
+  if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) {
+    return pathOrUrl;
+  }
+  const base = typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : "http://127.0.0.1:8000";
+  const cleanPath = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+  return `${base}${cleanPath}`;
 }
 
 // Academic Support API Calls
@@ -572,6 +644,56 @@ export async function explainAcademicConcept(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Concept explanation failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function requestVideoGeneration(
+  token: string,
+  payload: VideoGenerationRequest
+): Promise<VideoJobResponse> {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/student/learning/video`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Video generation request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function getVideoJobStatus(
+  token: string,
+  jobId: string
+): Promise<VideoJobResponse> {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/student/learning/video/${jobId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch video job status (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function getVideoByLesson(
+  token: string,
+  lessonId: number
+): Promise<VideoJobResponse> {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/student/learning/video/by-lesson/${lessonId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to fetch video for lesson (${res.status})`);
   }
   return res.json();
 }

@@ -19,6 +19,7 @@ from app.models.schemas import (
 from app.agents.ingress_guard import check_input_guardrail
 from app.agents.vector_knowledge import cosine_similarity
 from app.services.seed_data import generate_pseudo_embedding
+from app.services.youtube_service import resolve_youtube_resource
 
 # Maximum allowed selected text length
 MAX_SELECTED_TEXT_LENGTH = 2000
@@ -421,6 +422,11 @@ def synthesize_deterministic_microlesson(
     ]
 
     return MicroLessonPayload(
+        subject_id=subject.id,
+        subject_code=subject.code,
+        subject_name=subject.name,
+        module_id=module.id if module else None,
+        co_code=co_label,
         title=f"Demystifying {primary_topic}",
         topic=primary_topic,
         topic_key=normalize_topic_key(primary_topic),
@@ -428,7 +434,10 @@ def synthesize_deterministic_microlesson(
         duration_seconds=52,
         objective=f"Master {primary_topic} and address translation mechanics for {subject.name}.",
         scenes=scenes,
-        sources=citations
+        sources=citations,
+        video_url=None,
+        video_status="none",
+        youtube_resource=None
     )
 
 async def generate_grounded_microlesson(
@@ -462,8 +471,23 @@ async def generate_grounded_microlesson(
     cached_lesson = await lookup_cached_microlesson(session, subject, module, req, chunks)
     if cached_lesson:
         scenes_data = json.loads(cached_lesson.scenes_json) if cached_lesson.scenes_json else []
+        yt_resource = await resolve_youtube_resource(
+            subject_code=subject.code,
+            subject_name=subject.name,
+            module_code=cached_lesson.co_code,
+            module_title=module.title if module else None,
+            topic=cached_lesson.title,
+            existing_resource_json=cached_lesson.youtube_resource_json
+        )
+        video_url = f"/media/{cached_lesson.video_path}" if cached_lesson.video_path else None
+
         lesson_payload = MicroLessonPayload(
             id=cached_lesson.id,
+            subject_id=cached_lesson.subject_id,
+            subject_code=subject.code,
+            subject_name=subject.name,
+            module_id=cached_lesson.module_id,
+            co_code=cached_lesson.co_code,
             title=cached_lesson.title,
             topic=req.topic or (chunks[0]["topic_name"] if chunks else "Core Academic Concept"),
             topic_key=cached_lesson.topic_key,
@@ -471,7 +495,10 @@ async def generate_grounded_microlesson(
             duration_seconds=cached_lesson.duration_seconds,
             objective=f"Understand {cached_lesson.title} for {subject.name}.",
             scenes=scenes_data,
-            sources=citations
+            sources=citations,
+            video_url=video_url,
+            video_status=cached_lesson.video_status or ("ready" if cached_lesson.video_path else "none"),
+            youtube_resource=yt_resource
         )
         latency = round((time.time() - start_time) * 1000, 2)
         return AcademicExplainResponse(
@@ -503,6 +530,17 @@ async def generate_grounded_microlesson(
         citations=citations,
         page=page_obj
     )
+
+    # Universal YouTube Resolution for dynamic synthesized lesson
+    yt_resource = await resolve_youtube_resource(
+        subject_code=subject.code,
+        subject_name=subject.name,
+        module_code=module.co_code if module else req.co_code,
+        module_title=module.title if module else None,
+        topic=lesson_payload.topic or lesson_payload.title,
+        highlighted_text=req.selected_text
+    )
+    lesson_payload.youtube_resource = yt_resource
 
     latency = round((time.time() - start_time) * 1000, 2)
     return AcademicExplainResponse(

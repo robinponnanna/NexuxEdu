@@ -1,13 +1,17 @@
+import json
+import asyncio
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select, and_
 
 from app.models.schemas import (
     UserSecurityClaims, StudentSubjectSummary, SubjectMarksDetailResponse,
     SubjectModulesAnalysisResponse, StudentMarksOverviewResponse,
-    ModuleLearningMaterialResponse, AcademicExplainRequest, AcademicExplainResponse
+    ModuleLearningMaterialResponse, AcademicExplainRequest, AcademicExplainResponse,
+    VideoGenerationRequest, VideoJobResponse
 )
 from app.api.auth import get_current_user_claims
-from app.core.database import AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, MicroLesson, StudentEnrollment
 from app.services.academic_analytics import (
     get_student_subjects_analytics,
     get_student_subject_detail,
@@ -16,6 +20,10 @@ from app.services.academic_analytics import (
     get_module_learning_materials
 )
 from app.services.academic_rag import generate_grounded_microlesson
+from app.services.video_generator import (
+    create_video_job, get_job_status, render_microlesson_video,
+    ensure_learning_video, _video_jobs, LESSONS_VIDEO_DIR, MEDIA_DIR
+)
 
 router = APIRouter(prefix="/student", tags=["Student Academic Support"])
 
@@ -169,4 +177,93 @@ async def explain_academic_concept(
             claims=claims
         )
         return response
+
+
+@router.post("/learning/video", response_model=VideoJobResponse)
+async def request_video_generation_job(
+    req: VideoGenerationRequest,
+    claims: UserSecurityClaims = Depends(get_current_user_claims)
+):
+    """
+    Creates or ensures an asynchronous background job to render an MP4 narrated video
+    from a MicroLesson JSON record, topic key, or dynamic lesson payload.
+    Immediately returns a tracked job_id without blocking.
+    """
+    student_id = resolve_authorized_student_id(claims)
+
+    async with AsyncSessionLocal() as session:
+        try:
+            job_info = await ensure_learning_video(
+                session=session,
+                student_id=student_id,
+                subject_id=req.subject_id,
+                module_id=req.module_id,
+                lesson_id=req.lesson_id,
+                topic_key=req.topic_key,
+                topic=req.topic,
+                co_code=req.co_code,
+                direct_payload=req.lesson_payload,
+                background=True
+            )
+            return VideoJobResponse(**job_info)
+        except PermissionError as pe:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(pe)
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Video engine error: {str(e)}"
+            )
+
+
+@router.get("/learning/video/{job_id}", response_model=VideoJobResponse)
+async def get_video_generation_job_status(
+    job_id: str,
+    claims: UserSecurityClaims = Depends(get_current_user_claims)
+):
+    """
+    Returns the real-time execution status of an async video rendering job.
+    """
+    resolve_authorized_student_id(claims)
+    job_info = get_job_status(job_id)
+    if not job_info:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Video job '{job_id}' not found."
+        )
+    return VideoJobResponse(**job_info)
+
+
+@router.get("/learning/video/by-lesson/{lesson_id}", response_model=VideoJobResponse)
+async def get_video_for_lesson(
+    lesson_id: int,
+    claims: UserSecurityClaims = Depends(get_current_user_claims)
+):
+    """
+    Retrieves video status or cached video for a given lesson ID.
+    If video file is missing or unverified, ensures valid MP4 state.
+    """
+    student_id = resolve_authorized_student_id(claims)
+    async with AsyncSessionLocal() as session:
+        try:
+            job_info = await ensure_learning_video(
+                session=session,
+                student_id=student_id,
+                lesson_id=lesson_id,
+                background=False
+            )
+            return VideoJobResponse(**job_info)
+        except PermissionError as pe:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(pe)
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"MicroLesson or video not available: {str(e)}"
+            )
+
 

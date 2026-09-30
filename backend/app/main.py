@@ -46,6 +46,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
+MEDIA_DIR = Path(__file__).resolve().parent.parent / "media"
+LESSONS_DIR = MEDIA_DIR / "lessons"
+AUDIO_DIR = MEDIA_DIR / "audio"
+TEMP_DIR = MEDIA_DIR / "temp"
+for d in [MEDIA_DIR, LESSONS_DIR, AUDIO_DIR, TEMP_DIR]:
+    d.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
+
 # Mount API Routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(chat_router, prefix=settings.API_V1_STR)

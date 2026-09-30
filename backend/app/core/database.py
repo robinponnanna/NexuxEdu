@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, Float, Text, ForeignKey, DateTime, func, JSON, Boolean
+from sqlalchemy import Integer, String, Float, Text, ForeignKey, DateTime, func, JSON, Boolean, text
 from typing import Optional, List
 import datetime
 from app.core.config import settings
@@ -253,6 +253,14 @@ class MicroLesson(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     duration_seconds: Mapped[int] = mapped_column(Integer, default=180, nullable=False)
     scenes_json: Mapped[str] = mapped_column(Text, nullable=False) # JSON array of scene objects
+    video_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    video_status: Mapped[Optional[str]] = mapped_column(String(50), default="none", nullable=True) # "ready", "generating", "queued", "failed", "none"
+    video_duration: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    video_content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    video_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    video_generated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    audio_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    youtube_resource_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships
@@ -266,6 +274,22 @@ AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Safe column addition for micro_lessons if table already existed without new columns
+        for col_def in [
+            "video_path VARCHAR(255)",
+            "video_status VARCHAR(50) DEFAULT 'none'",
+            "video_duration INTEGER",
+            "video_content_hash VARCHAR(64)",
+            "video_error TEXT",
+            "video_generated_at DATETIME",
+            "audio_path VARCHAR(255)",
+            "youtube_resource_json TEXT"
+        ]:
+            col_name = col_def.split()[0]
+            try:
+                await conn.execute(text(f"ALTER TABLE micro_lessons ADD COLUMN {col_def};"))
+            except Exception:
+                pass
 
 async def get_db_session() -> AsyncSession:
     async with AsyncSessionLocal() as session:
